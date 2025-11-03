@@ -1,0 +1,23 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Blood Donation Matching & Emergency Alert System API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/auth/signup": {
+      "post": {
+        "summary": "Signup",
+        "requestBody": { "required": true },
+        "responses": { "201": { "description": "Signup successful" } }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login",
+        "requestBody": { "required": true },
+        "responses": { "200": { "description": "Login successful" } }
+      }
+    }
+  }
+}
