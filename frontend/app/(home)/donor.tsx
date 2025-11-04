@@ -66,15 +66,19 @@ export default function Donor() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
-        <View style={styles.header}>
-          <View style={styles.heroIcon}>
-            <IconSymbol name="drop.fill" size={48} color={colors.primary} />
+        {/* Header Section - match Notification header border style */}
+        <View style={styles.headerGradient}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIconWrap}>
+                <IconSymbol name="drop.fill" size={18} color="#FFFFFF" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Become a Donor</Text>
+                <Text style={styles.headerSubtitle}>Join thousands of heroes</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.title}>Become a Blood Donor</Text>
-          <Text style={styles.subtitle}>
-            Join thousands of heroes who save lives through blood donation
-          </Text>
         </View>
 
         {/* Register Button */}
@@ -188,10 +192,28 @@ const styles = StyleSheet.create({
   scrollContentWithTabBar: {
     paddingBottom: 100,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
+  headerGradient: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: colors.primary,
+    marginBottom: 16,
   },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+  headerSubtitle: { color: '#FFE9EF', fontSize: 13, fontWeight: '500', marginTop: 2 },
   heroIcon: {
     width: 80,
     height: 80,

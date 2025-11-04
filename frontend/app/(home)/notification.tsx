@@ -1,39 +1,74 @@
-
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import api, { getBaseUrl } from "../../service/api";
+import api, { getBaseUrl } from '../../service/api';
 import { useFocusEffect } from '@react-navigation/native';
 
+// Lazy-load LinearGradient to avoid type resolution issues in some setups
+let LinearGradient: any;
+try {
+  LinearGradient = require('expo-linear-gradient').LinearGradient;
+} catch {
+  LinearGradient = View;
+}
+
+type ScopeTab = 'donors' | 'requests';
+type RequestFilter = 'all' | 'unread' | 'normal' | 'urgent' | 'critical';
+
+// Shadows
+const shadow = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  android: { elevation: 4 },
+});
+
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  android: { elevation: 3 },
+});
+
 export default function NotificationScreen() {
-  const [activeTab, setActiveTab] = useState<'all'|'unread'|'request'|'message'|'urgent'|'normal'|'critical'>('all');
+  const [scope, setScope] = useState<ScopeTab>('requests');
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
       const list = await api.myNotifications();
-      setNotifications(list.map((n: any) => ({
-        id: n._id,
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        time: new Date(n.createdAt).toLocaleString(),
-        read: n.read,
-        urgent: !!n.urgent,
-        source: n?.meta?.source,
-        requestId: n?.meta?.requestId,
-        requesterName: n?.meta?.requesterName,
-        requesterBloodType: n?.meta?.requesterBloodType,
-        requesterPhone: n?.meta?.requesterPhone,
-        urgency: n?.meta?.urgency,
-      })));
+      setNotifications(
+        list.map((n: any) => ({
+          id: n._id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          time: new Date(n.createdAt).toLocaleString(),
+          read: n.read,
+          urgent: !!n.urgent,
+          source: n?.meta?.source,
+          requestId: n?.meta?.requestId,
+          requesterName: n?.meta?.requesterName,
+          requesterBloodType: n?.meta?.requesterBloodType,
+          requesterPhone: n?.meta?.requesterPhone,
+          urgency: n?.meta?.urgency,
+        }))
+      );
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
     } finally {
@@ -48,7 +83,9 @@ export default function NotificationScreen() {
         await load();
         timer = setInterval(load, 15000);
       })();
-      return () => { if (timer) clearInterval(timer); };
+      return () => {
+        if (timer) clearInterval(timer);
+      };
     }, [])
   );
 
@@ -83,336 +120,351 @@ export default function NotificationScreen() {
     }
   };
 
-  const filteredNotifications = notifications.filter(notification => {
-    // All = all request notifications
-    if (activeTab === 'all') return notification.type === 'request';
-    // Unread = only unread request notifications
-    if (activeTab === 'unread') return notification.type === 'request' && !notification.read;
-    if (activeTab === 'normal') return notification.type === 'request' && String(notification.urgency).toLowerCase() === 'normal';
-    if (activeTab === 'urgent') return notification.type === 'request' && String(notification.urgency).toLowerCase() === 'urgent';
-    if (activeTab === 'critical') return notification.type === 'request' && String(notification.urgency).toLowerCase() === 'critical';
-    return notification.type === activeTab;
-  });
+  // New design data shaping
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const scoped = useMemo(() => {
+    if (scope === 'requests') {
+      return notifications.filter((n) => n.type === 'request');
+    }
+    // donors scope: anything that is not a request (donation, message, system...)
+    return notifications.filter((n) => n.type !== 'request');
+  }, [notifications, scope]);
+
+  const filtered = useMemo(() => {
+    if (scope !== 'requests') return scoped;
+
+    // requests filters
+    return scoped.filter((n) => {
+      const urgency = String(n.urgency || '').toLowerCase();
+      if (requestFilter === 'all') return true;
+      if (requestFilter === 'unread') return !n.read;
+      if (requestFilter === 'normal') return urgency === 'normal';
+      if (requestFilter === 'urgent') return urgency === 'urgent';
+      if (requestFilter === 'critical') return urgency === 'critical';
+      return true;
+    });
+  }, [scoped, scope, requestFilter]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safe}>
       {Platform.OS === 'ios' && (
         <Stack.Screen
           options={{
-            title: "Notifications",
+            title: 'Notifications',
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
           }}
         />
       )}
-      
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Notifications</Text>
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-            </View>
-          )}
-        </View>
 
-        {/* Filter Tabs */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsContainer}
-          contentContainerStyle={styles.tabsContent}
+      <View style={styles.container}>
+        {/* Header - New Design (card-like gradient) */}
+        <LinearGradient
+          colors={[colors.primary, '#C40F45']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.headerCard, shadow as any]}
         >
-          {([
-            { key: 'all', label: 'All' },
-            { key: 'unread', label: 'Unread' },
-            { key: 'normal', label: 'Normal' },
-            { key: 'urgent', label: 'Urgent' },
-            { key: 'critical', label: 'Critical' },
-            { key: 'request', label: 'Requests' },
-            { key: 'message', label: 'Messages' },
-          ] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tab,
-                activeTab === tab.key && styles.activeTab
-              ]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Text style={[
-                styles.tabText,
-                activeTab === tab.key && styles.activeTabText
-              ]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+          <View style={styles.headerRow}>
+            <IconSymbol name="bell.fill" size={20} color="#FFFFFF" style={{ marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle}>Notifications</Text>
+              <Text style={styles.headerSubtitle}>Stay updated</Text>
+            </View>
 
-        {/* Dev: show current API base URL to help iOS device setup */}
-        {__DEV__ && (
-          <View style={{ paddingHorizontal: 20 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8 }}>API: {getBaseUrl()}</Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </View>
-        )}
+        </LinearGradient>
 
-        {/* Notifications List */}
-        <ScrollView 
-          style={styles.notificationsList}
-          contentContainerStyle={[
-            styles.notificationsContent,
-            Platform.OS !== 'ios' && styles.notificationsContentWithTabBar
-          ]}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {filteredNotifications.length === 0 ? (
+          {/* Segmented scope tabs (Donors/Requests) */}
+          <View style={styles.segmentWrap}>
+            <Segment label="Donors" active={scope === 'donors'} onPress={() => setScope('donors')} left />
+            <Segment label="Requests" active={scope === 'requests'} onPress={() => setScope('requests')} />
+          </View>
+
+          {/* Request sub-filters (only when scope === 'requests') */}
+          {scope === 'requests' && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.subTabsContent}
+              style={styles.subTabs}
+            >
+              {(['all', 'unread', 'normal', 'urgent', 'critical'] as RequestFilter[]).map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => setRequestFilter(key)}
+                  activeOpacity={0.9}
+                  style={[styles.subTab, requestFilter === key && styles.subTabActive]}
+                >
+                  <Text style={[styles.subTabText, requestFilter === key && styles.subTabTextActive]}>
+                    {key === 'all' ? 'All' : key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Dev helper - API base URL */}
+          {__DEV__ && (
+            <Text style={styles.devInfo}>API: {getBaseUrl()}</Text>
+          )}
+
+          {/* List */}
+          {filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <IconSymbol name="bell.slash" size={48} color={colors.textSecondary} />
               <Text style={styles.emptyStateText}>No notifications found</Text>
               <Text style={styles.emptyStateSubtext}>
-                {activeTab === 'unread' 
-                  ? "You're all caught up!" 
-                  : "Check back later for updates"}
+                {scope === 'requests' && requestFilter === 'unread' ? "You're all caught up!" : 'Check back later for updates'}
               </Text>
             </View>
           ) : (
-            filteredNotifications.map((notification) => (
-              <TouchableOpacity
-                key={notification.id}
-                style={[
-                  styles.notificationCard,
-                  !notification.read && styles.unreadNotification
-                ]}
-                onPress={async () => {
-                  try {
-                    await api.markOneRead(notification.id);
-                  } catch {}
-                  if (notification.type === 'request' && notification.requestId) {
-                    // Route to the correct detail screen based on the notification source
-                    const target = (notification as any)?.source || (notification as any)?.meta?.source;
-                    if (target === 'blood-request') {
-                      router.push({ pathname: '/requestStatus', params: { id: String(notification.requestId) } });
-                    } else {
-                      router.push({ pathname: '/requestDetail', params: { id: String(notification.requestId) } });
-                    }
-                  }
-                }}
-              >
-                <View style={styles.notificationContent}>
-                  <View style={[
-                    styles.notificationIcon,
-                    { backgroundColor: getNotificationColor(notification.type, notification.urgent) }
-                  ]}>
-                    <IconSymbol 
-                      name={getNotificationIcon(notification.type) as any} 
-                      size={20} 
-                      color="#FFFFFF" 
-                    />
-                  </View>
-                  
-                  <View style={styles.notificationText}>
-                    <View style={styles.notificationHeader}>
-                      <Text style={styles.notificationTitle}>{notification.title}</Text>
-                      {notification.urgent && (
-                        <View style={styles.urgentBadge}>
-                          <Text style={styles.urgentBadgeText}>!</Text>
-                        </View>
-                      )}
+            <View>
+              {filtered.map((notification) => {
+                const showUrgent = notification.urgent || String(notification.urgency || '').toLowerCase() === 'urgent' || String(notification.urgency || '').toLowerCase() === 'critical';
+                const badgeText =
+                  showUrgent ? 'Urgent' : !notification.read ? 'New' : undefined;
+
+                return (
+                  <TouchableOpacity
+                    key={notification.id}
+                    style={[styles.card, cardShadow as any]}
+                    onPress={async () => {
+                      try {
+                        await api.markOneRead(notification.id);
+                      } catch {}
+                      if (notification.type === 'request' && notification.requestId) {
+                        const target = (notification as any)?.source || (notification as any)?.meta?.source;
+                        if (target === 'blood-request') {
+                          router.push({ pathname: '/requestStatus', params: { id: String(notification.requestId) } });
+                        } else {
+                          router.push({ pathname: '/requestDetail', params: { id: String(notification.requestId) } });
+                        }
+                      }
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        {notification.title}
+                      </Text>
+                      {!!badgeText && <Badge text={badgeText} />}
                     </View>
-                    <Text style={styles.notificationMessage}>{notification.message}</Text>
-                    <Text style={styles.notificationTime}>{notification.time}</Text>
-                  </View>
-                  
-                  {!notification.read && (
-                    <View style={styles.unreadCornerDot} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))
+
+                    <View style={{ flexDirection: 'row' }}>
+                      <View
+                        style={[
+                          styles.cardIcon,
+                          { backgroundColor: getNotificationColor(notification.type, !!notification.urgent) },
+                        ]}
+                      >
+                        <IconSymbol name={getNotificationIcon(notification.type) as any} size={18} color="#FFFFFF" />
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardMessage}>{notification.message}</Text>
+                        <Text style={styles.cardTime}>{notification.time}</Text>
+                      </View>
+                    </View>
+
+                    {!notification.read && <View style={styles.unreadCornerDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           )}
         </ScrollView>
-
-        {/* Action Buttons */}
-          {/* {filteredNotifications.length > 0 && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={async () => { await api.markAllRead(); load(); }}>
-              <IconSymbol name="checkmark.circle" size={20} color={colors.success} />
-              <Text style={styles.actionButtonText}>Mark All Read</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionButton} onPress={load}>
-              <IconSymbol name="arrow.clockwise" size={20} color={colors.text} />
-              <Text style={styles.actionButtonText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-        )} */}
       </View>
     </SafeAreaView>
   );
 }
 
+function Segment({
+  active,
+  label,
+  onPress,
+  left,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+  left?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={[styles.segment, active && styles.segmentActive, left ? { marginRight: 8 } : null]}
+    >
+      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function Badge({ text }: { text: 'Urgent' | 'New' | 'Info' }) {
+  const bg = text === 'Urgent' ? '#F04444' : text === 'New' ? colors.primary : colors.textSecondary;
+  return (
+    <View style={[styles.badge, { backgroundColor: bg }]}>
+      <Text style={styles.badgeText}>{text}</Text>
+    </View>
+  );
+}
+
+const spacing = {
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 20,
+};
+
+const radii = {
+  sm: 10,
+  md: 12,
+  lg: 16,
+  xl: 22,
+};
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  safe: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.background },
+
+  // Header (card-like gradient)
+  headerCard: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderRadius: radii.lg,
   },
-  content: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-  },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  headerTitle: { color: '#FFF', fontSize: 22, fontWeight: '800', letterSpacing: 0.2 },
+  headerSubtitle: { color: '#FFE9EF', fontSize: 13, fontWeight: '500', marginTop: 4 },
   unreadBadge: {
-    backgroundColor: colors.error,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     minWidth: 24,
     alignItems: 'center',
   },
   unreadBadgeText: {
-    color: '#FFFFFF',
+    color: colors.primary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
   },
-  tabsContainer: {
-    maxHeight: 50,
-    marginBottom: 16,
+
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: 88,
   },
-  tabsContent: {
-    paddingHorizontal: 20,
+
+  // Scope segments
+  segmentWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#F2F3F7',
+    borderRadius: radii.lg,
+    padding: 4,
+    marginBottom: spacing.lg,
   },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    marginRight: 12,
+  segment: {
+    flex: 1,
+    height: 36,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentActive: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  activeTab: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  notificationsList: {
-    flex: 1,
-  },
-  notificationsContent: {
-    paddingHorizontal: 20,
-  },
-  notificationsContentWithTabBar: {
-    paddingBottom: 100,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
+  segmentText: {
+    fontSize: 13,
     color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  notificationCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-  },
-  notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  notificationText: {
-    flex: 1,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  notificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
-  },
-  urgentBadge: {
-    backgroundColor: colors.error,
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  urgentBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
     fontWeight: '700',
   },
-  notificationMessage: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 8,
+  segmentTextActive: {
+    color: colors.text,
   },
-  notificationTime: {
-    fontSize: 12,
-    color: colors.textSecondary,
+
+  // Sub tabs (request filters)
+  subTabs: {
+    maxHeight: 48,
+    marginBottom: spacing.lg,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
+  subTabsContent: {
+    paddingHorizontal: 2,
+  },
+  subTab: {
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  subTabActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
+  },
+  subTabText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  subTabTextActive: { color: colors.primary },
+
+  // Cards
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  cardTitle: { flex: 1, fontSize: 15, color: colors.text, fontWeight: '800' },
+  badge: {
+    paddingHorizontal: 10,
+    height: 24,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
-    marginTop: 4,
   },
+  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  cardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  cardMessage: { color: colors.text, fontSize: 13.5, marginTop: 2 },
+  cardTime: { marginTop: 10, color: colors.textSecondary, fontSize: 12 },
+
+  // Empty state
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyStateText: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8 },
+  emptyStateSubtext: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+
+  // Misc
   unreadCornerDot: {
     position: 'absolute',
     top: 8,
@@ -422,28 +474,5 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#E53935',
   },
-  actionButtons: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginHorizontal: 6,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-    marginLeft: 8,
-  },
+  devInfo: { color: colors.textSecondary, fontSize: 12, marginBottom: 12 },
 });

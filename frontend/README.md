@@ -25,6 +25,32 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+### Trouble starting? Offline mode
+
+If you see a `TypeError: fetch failed` during startup (often due to a proxy, firewall, or temporary network issue), you can start Expo in offline mode which skips network lookups:
+
+```powershell
+npm run start:offline
+```
+
+Alternatively for a single session:
+
+```powershell
+$env:EXPO_OFFLINE="1"; npx expo start -c
+```
+
+Optional: disable telemetry in restricted networks
+
+```powershell
+$env:EXPO_NO_TELEMETRY="1"; npx expo start
+```
+
+If you're behind a corporate proxy, ensure the `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables are set correctly for your shell, or unset them if not needed:
+
+```powershell
+Remove-Item Env:HTTP_PROXY -ErrorAction SilentlyContinue; Remove-Item Env:HTTPS_PROXY -ErrorAction SilentlyContinue; npx expo start
+```
+
 ## API connectivity
 
 The app talks to the backend REST API. By default, it tries to auto-detect your LAN IP from Expo and use `http://<LAN_IP>:5000`. You can override this via environment variables when starting Expo:

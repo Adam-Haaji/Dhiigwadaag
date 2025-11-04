@@ -79,100 +79,71 @@ export default function RequestScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Blood Requests</Text>
-          <Text style={styles.subtitle}>
-            Create a request or respond to emergency needs
-          </Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.createButton} onPress={handleCreateRequest}>
-            <IconSymbol name="plus.circle.fill" size={24} color="#FFFFFF" />
-            <Text style={styles.createButtonText}>Create Request</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.emergencyButton} onPress={handleEmergencyRequest}>
-            <IconSymbol name="exclamationmark.triangle.fill" size={24} color="#FFFFFF" />
-            <Text style={styles.emergencyButtonText}>Emergency Request</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Blood Type Quick Access */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Blood Types</Text>
-          <View style={styles.bloodTypesGrid}>
-            {bloodTypes.map((type, index) => (
-              <TouchableOpacity key={index} style={styles.bloodTypeCard}>
-                <Text style={styles.bloodTypeText}>{type}</Text>
-                <Text style={styles.bloodTypeLabel}>Available</Text>
-              </TouchableOpacity>
-            ))}
+        {/* Header - match Notification style */}
+        <View style={styles.headerGradient}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIconWrap}>
+                <IconSymbol name="clipboard" size={18} color="#FFFFFF" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Request Blood</Text>
+                <Text style={styles.headerSubtitle}>Get help when you need it</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Recent Requests */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Requests</Text>
-          {recentRequests.map((request) => (
-            <View key={request.id} style={styles.requestCard}>
-              <View style={styles.requestHeader}>
-                <View style={styles.requestBloodType}>
-                  <Text style={styles.requestBloodTypeText}>{request.bloodType}</Text>
-                </View>
-                <View style={styles.requestStatus}>
-                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(request.status) }]} />
-                  <Text style={[styles.statusText, { color: getStatusColor(request.status) }]}>
-                    {request.status}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.requestDetails}>
-                <View style={styles.requestInfo}>
-                  <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
-                  <Text style={styles.requestLocation}>{request.location}</Text>
-                </View>
-                
-                <View style={styles.requestInfo}>
-                  <IconSymbol name="clock.fill" size={16} color={colors.textSecondary} />
-                  <Text style={styles.requestTime}>{request.timeAgo}</Text>
-                </View>
-              </View>
-              
-              <View style={styles.requestFooter}>
-                <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(request.urgency) }]}>
-                  <Text style={styles.urgencyText}>{request.urgency}</Text>
-                </View>
-                
-                {request.status === 'Active' && (
-                  <TouchableOpacity style={styles.respondButton}>
-                    <Text style={styles.respondButtonText}>Respond</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+        {/* Create Request card */}
+        <View style={styles.card}> 
+          <View style={styles.cardRow}>
+            <View style={[styles.iconBadge, { backgroundColor: `${colors.secondary}15` }]}>
+              <IconSymbol name="doc.text" size={20} color={colors.secondary} />
             </View>
-          ))}
+            <View style={styles.cardTextWrap}>
+              <Text style={styles.cardTitle}>Create Request</Text>
+              <Text style={styles.cardSubtitle}>Submit a regular blood request</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.secondary }]} onPress={handleCreateRequest}>
+            <Text style={styles.primaryBtnText}>Create Request</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Statistics */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Request Statistics</Text>
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>24</Text>
-              <Text style={styles.statLabel}>Active Requests</Text>
+        {/* Emergency Request card */}
+        <View style={[styles.card, styles.emergencyCard]}> 
+          <View style={styles.cardRow}>
+            <View style={[styles.iconBadge, { backgroundColor: `${colors.error}15` }]}>
+              <IconSymbol name="phone.fill" size={20} color={colors.error} />
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>156</Text>
-              <Text style={styles.statLabel}>Fulfilled Today</Text>
+            <View style={styles.cardTextWrap}>
+              <Text style={styles.cardTitle}>Emergency Request</Text>
+              <Text style={styles.cardSubtitle}>Urgent blood needed immediately</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>8</Text>
-              <Text style={styles.statLabel}>Emergency</Text>
-            </View>
+          </View>
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.error }]} onPress={handleEmergencyRequest}>
+            <Text style={styles.primaryBtnText}>Emergency Request</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Guidelines */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Request Guidelines</Text>
+          <View style={styles.tipRow}>
+            <View style={styles.bullet} />
+            <Text style={styles.tipText}>Provide accurate patient information</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <View style={styles.bullet} />
+            <Text style={styles.tipText}>Specify blood type and quantity needed</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <View style={styles.bullet} />
+            <Text style={styles.tipText}>Include hospital name and location</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <View style={styles.bullet} />
+            <Text style={styles.tipText}>For emergencies, use the emergency request option</Text>
           </View>
         </View>
       </ScrollView>
@@ -195,197 +166,106 @@ const styles = StyleSheet.create({
   scrollContentWithTabBar: {
     paddingBottom: 100,
   },
-  header: {
-    marginBottom: 24,
+  headerGradient: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: colors.primary,
+    marginBottom: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    lineHeight: 24,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    marginBottom: 32,
-    gap: 12,
-  },
-  createButton: {
-    backgroundColor: colors.secondary,
-    flex: 1,
-    flexDirection: 'row',
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    marginRight: 10,
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    color: '#FFE9EF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  card: {
+    backgroundColor: colors.card,
     borderRadius: 16,
-    boxShadow: '0px 4px 12px rgba(52, 152, 219, 0.3)',
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  emergencyCard: {
+    backgroundColor: '#FFF5F5',
   },
-  emergencyButton: {
-    backgroundColor: colors.error,
-    flex: 1,
+  cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
+  },
+  iconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    marginRight: 12,
+  },
+  cardTextWrap: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  cardSubtitle: { marginTop: 6, color: colors.textSecondary, fontSize: 13 },
+  primaryBtn: {
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  sectionCard: {
+    backgroundColor: colors.card,
     borderRadius: 16,
-    boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
-    elevation: 4,
-  },
-  emergencyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  section: {
-    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  bloodTypesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  bloodTypeCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    width: '23%',
-    alignItems: 'center',
-    marginBottom: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  bloodTypeText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  bloodTypeLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  requestCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  requestHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  requestBloodType: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  requestBloodTypeText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
   },
-  requestStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  bullet: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    backgroundColor: colors.primary,
+    marginTop: 6,
+    marginRight: 12,
   },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  requestDetails: {
-    marginBottom: 16,
-  },
-  requestInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  requestLocation: {
-    fontSize: 16,
-    color: colors.text,
-    marginLeft: 8,
-  },
-  requestTime: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginLeft: 8,
-  },
-  requestFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  urgencyBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  urgencyText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  respondButton: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  respondButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statsContainer: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
+  tipText: { flex: 1, color: colors.text, fontSize: 14, lineHeight: 20 },
 });

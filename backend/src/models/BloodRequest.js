@@ -2,8 +2,9 @@ import mongoose from 'mongoose';
 
 const districts = [
   'Abdiaziz', 'Bondhere', 'Daynile', 'Dharkenley', 'Hamar Jajab', 'Hamar Weyne',
-  'Hodan', 'Howlwadag', 'Karaan', 'Shangani', 'Shibis', 'Wadajir', 'Waberi',
-  'Wartanabada', 'Yaqshid',
+  'Hodan', 'Howlwadag', 'Howlwadaag', 'Karaan', 'Kaaran', 'Shangani', 'Shibis',
+  'Wadajir', 'Wadajir (Medina)', 'Waberi', 'Wartanabada', 'Wardhiigley (Warta Nabadda)',
+  'Yaqshid', 'Garasbaley', 'Kahda',
 ];
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];

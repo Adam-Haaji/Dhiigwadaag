@@ -1,21 +1,27 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import api, { Donor } from "../service/api";
+import SelectField from '../components/SelectField';
 
 export default function EmergencyRequest() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBloodType, setSelectedBloodType] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
-  const [showBloodTypeModal, setShowBloodTypeModal] = useState(false);
-  const [showLocationModal, setShowLocationModal] = useState(false);
 
-  const [bloodTypes, setBloodTypes] = useState<string[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
+  const defaultBloodTypes = useMemo(() => ['A+','A-','B+','B-','AB+','AB-','O+','O-'], []);
+  const [bloodTypes, setBloodTypes] = useState<string[]>(defaultBloodTypes);
+  // Use static Banaadir districts as baseline; merge backend meta if present.
+  const banaadirDistricts = useMemo(() => [
+    'Abdiaziz', 'Bondhere', 'Daynile', 'Dharkenley', 'Hamar Jajab', 'Hamar Weyne', 'Hodan',
+    'Howlwadaag', 'Kaaran', 'Shangani', 'Shibis', 'Wadajir (Medina)', 'Waberi',
+    'Wardhiigley (Warta Nabadda)', 'Yaqshid', 'Garasbaley', 'Kahda',
+  ], []);
+  const [locations, setLocations] = useState<string[]>(banaadirDistricts);
 
   const [donors, setDonors] = useState<Donor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,15 +62,24 @@ export default function EmergencyRequest() {
     }
   };
 
-  // Load selectable options dynamically from backend
+  // Load selectable options dynamically from backend and merge
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const meta: any = await api.donorsMeta();
         if (cancelled) return;
-        setBloodTypes(Array.isArray(meta?.bloodTypes) ? meta.bloodTypes : []);
-        setLocations(Array.isArray(meta?.locations) ? meta.locations : []);
+        const bt = Array.isArray(meta?.bloodTypes) ? meta.bloodTypes : [];
+        const locs = Array.isArray(meta?.locations) ? meta.locations : [];
+        if (bt.length) {
+          // Merge backend-provided types with the defaults
+          setBloodTypes(Array.from(new Set([...defaultBloodTypes, ...bt])));
+        }
+        if (locs.length) {
+          // Merge backend locations with static list, ensuring uniqueness
+          const merged = Array.from(new Set([...banaadirDistricts, ...locs]));
+          setLocations(merged);
+        }
       } catch (e) {
         // Keep empty lists on failure; user can still type & search by q
       }
@@ -85,40 +100,33 @@ export default function EmergencyRequest() {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Emergency Banner */}
-      <View style={styles.emergencyBanner}>
-        <IconSymbol name="exclamationmark.triangle.fill" size={24} color="#FFFFFF" />
-        <View style={styles.emergencyContent}>
-          <Text style={styles.emergencyTitle}>URGENT BLOOD NEEDED</Text>
-          <Text style={styles.emergencyText}>Critical situation - immediate response required</Text>
-        </View>
+      {/* Header Card (visual design only) */}
+      <View style={styles.headerCard}>
+        <Text style={styles.heroTitle}>Emergency</Text>
+        <Text style={styles.heroSubtitle}>Find donors immediately</Text>
       </View>
 
       {/* Filter Form */}
       <View style={styles.filterContainer}>
-        <Text style={styles.filterTitle}>Emergency Blood Request</Text>
-        
         {/* Blood Type Dropdown */}
-        <TouchableOpacity 
-          style={styles.dropdown}
-          onPress={() => setShowBloodTypeModal(true)}
-        >
-          <Text style={[styles.dropdownText, !selectedBloodType && styles.placeholderText]}>
-            {selectedBloodType || 'Select Blood Type'}
-          </Text>
-          <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <Text style={styles.fieldLabel}></Text>
+        <SelectField
+          label="Blood Type"
+          placeholder="Select Blood Type"
+          value={selectedBloodType || null}
+          options={bloodTypes.map(v => ({ label: v, value: v }))}
+          onChange={(v: string) => setSelectedBloodType(v)}
+        />
 
         {/* Location Dropdown */}
-        <TouchableOpacity 
-          style={styles.dropdown}
-          onPress={() => setShowLocationModal(true)}
-        >
-          <Text style={[styles.dropdownText, !selectedLocation && styles.placeholderText]}>
-            {selectedLocation || 'Select Location'}
-          </Text>
-          <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <Text style={styles.fieldLabel}></Text>
+        <SelectField
+          label="Location"
+          placeholder="Select Location"
+          value={selectedLocation || null}
+          options={locations.map(v => ({ label: v, value: v }))}
+          onChange={(v: string) => setSelectedLocation(v)}
+        />
 
         {/* Search Bar */}
         <View style={styles.searchBar}>
@@ -243,103 +251,7 @@ export default function EmergencyRequest() {
         )}
       </ScrollView>
 
-      {/* Blood Type Modal */}
-      <Modal
-        visible={showBloodTypeModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowBloodTypeModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Blood Type</Text>
-              <TouchableOpacity onPress={() => setShowBloodTypeModal(false)}>
-                <IconSymbol name="xmark" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalList}>
-              {bloodTypes.length === 0 && (
-                <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-                  <Text style={{ color: colors.textSecondary }}>No blood types yet — try searching directly.</Text>
-                </View>
-              )}
-              {bloodTypes.map((bloodType) => (
-                <TouchableOpacity
-                  key={bloodType}
-                  style={[
-                    styles.modalItem,
-                    selectedBloodType === bloodType && styles.selectedItem
-                  ]}
-                  onPress={() => {
-                    setSelectedBloodType(bloodType);
-                    setShowBloodTypeModal(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.modalItemText,
-                    selectedBloodType === bloodType && styles.selectedItemText
-                  ]}>
-                    {bloodType}
-                  </Text>
-                  {selectedBloodType === bloodType && (
-                    <IconSymbol name="checkmark" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Location Modal */}
-      <Modal
-        visible={showLocationModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLocationModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Location</Text>
-              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-                <IconSymbol name="xmark" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalList}>
-              {locations.length === 0 && (
-                <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-                  <Text style={{ color: colors.textSecondary }}>No locations yet — try searching directly.</Text>
-                </View>
-              )}
-              {locations.map((location) => (
-                <TouchableOpacity
-                  key={location}
-                  style={[
-                    styles.modalItem,
-                    selectedLocation === location && styles.selectedItem
-                  ]}
-                  onPress={() => {
-                    setSelectedLocation(location);
-                    setShowLocationModal(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.modalItemText,
-                    selectedLocation === location && styles.selectedItemText
-                  ]}>
-                    {location}
-                  </Text>
-                  {selectedLocation === location && (
-                    <IconSymbol name="checkmark" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {/* Removed platform ActionSheets in favor of consistent modal SelectField */}
     </SafeAreaView>
   );
 }
@@ -348,6 +260,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  headerCard: {
+    backgroundColor: colors.error,
+    margin: 20,
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#FFE9EF',
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
@@ -396,12 +336,23 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: 20,
     marginBottom: 16,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  filterTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 8,
+    marginTop: 4,
   },
   // removed profileHint as we no longer auto-fill from profile
   dropdown: {

@@ -69,6 +69,20 @@ export default function ProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header - match Notification header border style */}
+        <View style={styles.headerGradient}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIconWrap}>
+                <IconSymbol name="person.fill" size={18} color="#FFFFFF" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Profile</Text>
+                <Text style={styles.headerSubtitle}>Your details and settings</Text>
+              </View>
+            </View>
+          </View>
+        </View>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
@@ -261,6 +275,28 @@ const styles = StyleSheet.create({
   scrollContentWithTabBar: {
     paddingBottom: 100,
   },
+  headerGradient: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: colors.primary,
+    marginBottom: 16,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+  headerSubtitle: { color: '#FFE9EF', fontSize: 13, fontWeight: '500', marginTop: 2 },
   profileHeader: {
     backgroundColor: colors.card,
     borderRadius: 20,

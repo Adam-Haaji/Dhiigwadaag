@@ -51,3 +51,33 @@ export const Fonts = Platform.select({
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });
+
+// App theme additions (requested): colors, spacing, radii
+export const colors = {
+  primary: '#E31B54',
+  primaryDark: '#C40F45',
+  bg: '#F6F7FB',
+  card: '#FFFFFF',
+  border: '#E7E7EA',
+  text: '#1F2937',
+  textMuted: '#6B7280',
+  success: '#16A34A',
+  info: '#2563EB',
+  danger: '#DC2626',
+} as const;
+
+export const spacing = {
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 24,
+} as const;
+
+export const radii = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22,
+  pill: 999,
+} as const;
