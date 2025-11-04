@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import api from "../service/api";
+import SelectField from '../components/SelectField';
 
 export default function DonorRegistration() {
   const insets = useSafeAreaInsets();
@@ -33,46 +34,32 @@ export default function DonorRegistration() {
 
   const phoneRegex = useMemo(() => /^\+?[0-9\s\-()]{7,20}$/, []);
 
-  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-  const districts = useMemo(() => [
-    'Abdiaziz','Bondhere','Daynile','Dharkenley','Hamar Jajab','Hamar Weyne','Hodan','Howlwadag','Karaan','Shangani','Shibis','Wadajir','Waberi','Wartanabada','Yaqshid'
-  ], []);
-  const ages = Array.from({ length: 63 }, (_, i) => (i + 18).toString());
+  const bloodTypeOptions = useMemo(() => (
+    ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ label: v, value: v }))
+  ), []);
+  const districtOptions = useMemo(() => (
+    [
+      'Abdiaziz',
+      'Bondhere',
+      'Daynile',
+      'Dharkenley',
+      'Hamar Jajab',
+      'Hamar Weyne',
+      'Hodan',
+      'Howlwadaag',
+      'Kaaran',
+      'Shangani',
+      'Shibis',
+      'Wadajir (Medina)',
+      'Waberi',
+      'Wardhiigley (Warta Nabadda)',
+      'Yaqshid',
+      'Garasbaley',
+      'Kahda',
+    ].map(v => ({ label: v, value: v }))
+  ), []);
   const totalSteps = 1;
 
-  const SelectField = ({ label, placeholder, value, options, onChange }: any) => {
-    const [open, setOpen] = useState(false);
-    return (
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={[commonStyles.input, styles.dropdownButton]}
-          onPress={() => setOpen(!open)}
-        >
-          <Text style={{ color: value ? colors.text : colors.textSecondary }}>
-            {value || placeholder}
-          </Text>
-          <IconSymbol name={open ? 'chevron.up' : 'chevron.down'} size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-        {open && (
-          <View style={styles.dropdownPanel}>
-            <ScrollView style={{ maxHeight: 220 }}>
-              {options.map((opt: string) => (
-                <TouchableOpacity
-                  key={opt}
-                  style={styles.dropdownItem}
-                  onPress={() => { onChange(opt); setOpen(false); }}
-                >
-                  <Text style={[styles.dropdownText, value === opt && styles.dropdownTextSelected]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-    );
-  };
 
   // Helpers
   const parseDate = (input: string): Date | null => {
@@ -205,21 +192,27 @@ export default function DonorRegistration() {
             keyboardType="email-address"
           />
 
-          <SelectField
-            label="Blood Type *"
-            placeholder="Select blood type"
-            value={formData.bloodGroup}
-            options={bloodTypes}
-            onChange={(v: string) => updateFormData('bloodGroup', v)}
-          />
+          <View style={styles.inputGroup}>
+            <SelectField
+              label="Blood Type"
+              required
+              placeholder="Select blood type"
+              value={formData.bloodGroup}
+              options={bloodTypeOptions}
+              onChange={(v: string) => updateFormData('bloodGroup', v)}
+            />
+          </View>
 
-          <SelectField
-            label="Location *"
-            placeholder="Select your district"
-            value={formData.district}
-            options={districts}
-            onChange={(v: string) => updateFormData('district', v)}
-          />
+          <View style={styles.inputGroup}>
+            <SelectField
+              label="Location"
+              required
+              placeholder="Select your district"
+              value={formData.district}
+              options={districtOptions}
+              onChange={(v: string) => updateFormData('district', v)}
+            />
+          </View>
 
           <TextInput
             style={[commonStyles.input, focusedField === 'phone' && commonStyles.inputFocused]}
@@ -232,20 +225,28 @@ export default function DonorRegistration() {
             keyboardType="phone-pad"
           />
 
-          <SelectField
-            label="Gender *"
-            placeholder="Select gender"
-            value={formData.gender}
-            options={['Male', 'Female']}
-            onChange={(v: string) => updateFormData('gender', v)}
-          />
+          <View style={styles.inputGroup}>
+            <SelectField
+              label="Gender"
+              required
+              placeholder="Select gender"
+              value={formData.gender}
+              options={[{ label: 'Male', value: 'Male' }, { label: 'Female', value: 'Female' }]}
+              onChange={(v: string) => updateFormData('gender', v)}
+            />
+          </View>
 
-          <SelectField
-            label="Age *"
-            placeholder="Select age"
+          <Text style={styles.inputLabel}>Age *</Text>
+          <TextInput
+            style={[commonStyles.input, focusedField === 'age' && commonStyles.inputFocused]}
+            placeholder="Enter your age"
+            placeholderTextColor={colors.textSecondary}
             value={formData.age}
-            options={ages}
-            onChange={(v: string) => updateFormData('age', v)}
+            onChangeText={(v) => updateFormData('age', v.replace(/[^0-9]/g, '').slice(0, 3))}
+            onFocus={() => setFocusedField('age')}
+            onBlur={() => setFocusedField('')}
+            keyboardType="number-pad"
+            inputMode="numeric"
           />
 
           <Text style={styles.inputLabel}>Weight (kg)</Text>
@@ -260,13 +261,16 @@ export default function DonorRegistration() {
             keyboardType="numeric"
           />
 
-          <SelectField
-            label="Availability *"
-            placeholder="Select availability"
-            value={formData.availabilityStatus}
-            options={['Available', 'Unavailable']}
-            onChange={(v: string) => updateFormData('availabilityStatus', v)}
-          />
+          <View style={styles.inputGroup}>
+            <SelectField
+              label="Availability"
+              required
+              placeholder="Select availability"
+              value={formData.availabilityStatus}
+              options={[{ label: 'Available', value: 'Available' }, { label: 'Unavailable', value: 'Unavailable' }]}
+              onChange={(v: string) => updateFormData('availabilityStatus', v)}
+            />
+          </View>
 
           <TouchableOpacity style={styles.registerBtn} onPress={handleNext}>
             <Text style={styles.registerBtnText}>Register</Text>

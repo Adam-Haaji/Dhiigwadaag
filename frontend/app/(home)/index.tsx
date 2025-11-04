@@ -1,11 +1,16 @@
 import React, { useCallback, useState } from "react";
 import { Stack, router } from "expo-router";
-import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity } from "react-native";
+import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity, Dimensions } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, commonStyles } from "@/styles/commonStyles";
 import { api, getBaseUrl } from "@/service/api";
+import { colors as theme, spacing as themeSpacing, radii as themeRadii } from "@/constants/theme";
 // Connectivity diagnostics removed per request
+
+// Lazy-load LinearGradient like in Notifications to keep consistent header rendering
+let LinearGradient: any;
+try { LinearGradient = require('expo-linear-gradient').LinearGradient; } catch { LinearGradient = View; }
 
 export default function index() {
   // Diagnostics state removed
@@ -72,68 +77,69 @@ export default function index() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Welcome Section */}
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeText}>Welcome Back!</Text>
-          <Text style={styles.welcomeSubtext}>Ready to save lives today?</Text>
-        </View>
-
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          {stats.map((stat, index) => (
-            <View key={index} style={[styles.statCard, { borderLeftColor: stat.color }]}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: stat.color }]}>
-                  <IconSymbol name={stat.icon as any} size={24} color="#FFFFFF" />
-                </View>
-                <View style={styles.statText}>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statTitle}>{stat.title}</Text>
-                </View>
+        {/* Header (match Notification header style) */}
+        <LinearGradient
+          colors={[theme.primary, '#C40F45']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIconWrap}>
+                <IconSymbol name="heart.fill" size={18} color="#FFFFFF" />
               </View>
+              <View>
+                <Text style={styles.headerTitle}>Welcome Back!</Text>
+                <Text style={styles.headerSubtitle}>Save lives, donate blood</Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Stats Row */}
+        <View style={styles.statRow}>
+          {stats.map((s, i) => (
+            <View key={i} style={styles.statCardNew}>
+              <View style={[styles.statIconWrap, { backgroundColor: `${s.color}15` }]}>
+                <IconSymbol name={s.icon as any} size={18} color={s.color} />
+              </View>
+              <Text style={styles.statValueNew}>{s.value}</Text>
+              <Text style={styles.statLabelNew}>{s.title}</Text>
             </View>
           ))}
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/donorRegistration')}
-            >
-              <IconSymbol name="drop.fill" size={32} color={colors.primary} />
-              <Text style={styles.actionText}>Register as Donor</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleNew}>Quick Actions</Text>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/createRequest')}>
+              <View style={styles.actionIcon}>
+                <IconSymbol name="doc.text" size={18} color={colors.text} />
+              </View>
+              <Text style={styles.actionLabel}>Request Blood</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/createRequest')}
-            >
-              <IconSymbol name="plus.circle.fill" size={32} color={colors.secondary} />
-              <Text style={styles.actionText}>Request Blood</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/(home)/searchDonor')}
-            >
-              <IconSymbol name="magnifyingglass" size={32} color={colors.accent} />
-              <Text style={styles.actionText}>Search Donors</Text>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/emergencyRequest')}>
+              <View style={styles.actionIcon}>
+                <IconSymbol name="phone.fill" size={18} color={colors.text} />
+              </View>
+              <Text style={styles.actionLabel}>Emergency</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Diagnostics (safe) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Diagnostics</Text>
-          <View style={styles.connectCard}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleNew}>Diagnostics</Text>
+          <View style={styles.connectCardNew}>
             <Text style={styles.connectTitle}>Backend Health</Text>
             <Text style={styles.connectSub}>API Base: {getBaseUrl()}</Text>
             <View style={styles.connectButtons}>
               <TouchableOpacity
                 onPress={onCheckHealth}
                 disabled={diagLoading}
-                style={[styles.connectBtn, { backgroundColor: diagLoading ? '#9CA3AF' : '#2563EB' }]}
+                style={[styles.connectBtn, { backgroundColor: diagLoading ? '#9CA3AF' : theme.info }]}
               >
                 <Text style={styles.connectBtnTxt}>{diagLoading ? 'Checking…' : 'Check Health'}</Text>
               </TouchableOpacity>
@@ -154,7 +160,7 @@ export default function index() {
         </View>
 
         {/* Donor Registration Banner */}
-        <View style={styles.section}>
+        <View style={styles.sectionCard}>
           <View style={styles.bannerCard}>
             <View style={{ flex: 1 }}>
               <Text style={styles.bannerTitle}>Become a Donor</Text>
@@ -171,12 +177,12 @@ export default function index() {
         </View>
 
         {/* Blood Donation Tips */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Blood Donation Tips</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleNew}>Blood Donation Tips</Text>
           {bloodTips.map((tip, index) => (
             <View key={index} style={styles.tipCard}>
-              <View style={styles.tipIcon}>
-                <IconSymbol name={tip.icon as any} size={20} color={colors.primary} />
+              <View style={[styles.tipIcon, { backgroundColor: colors.highlight }]}>
+                <IconSymbol name={tip.icon as any} size={18} color={theme.primary} />
               </View>
               <View style={styles.tipContent}>
                 <Text style={styles.tipTitle}>{tip.title}</Text>
@@ -205,98 +211,130 @@ export default function index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: themeSpacing.xl,
+    paddingVertical: themeSpacing.lg,
   },
   scrollContentWithTabBar: {
     paddingBottom: 100, // Extra padding for floating tab bar
   },
-  welcomeSection: {
-    marginBottom: 24,
+  headerGradient: {
+    paddingHorizontal: themeSpacing.xl,
+    paddingTop: themeSpacing.lg,
+    paddingBottom: themeSpacing.xl,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: themeSpacing.md,
   },
-  welcomeText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  welcomeSubtext: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  statsContainer: {
-    marginBottom: 32,
-  },
-  statCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  statContent: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
-    marginRight: 16,
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  statText: {
-    flex: 1,
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    marginBottom: 2,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
+  headerSubtitle: {
+    color: '#FFE9EF',
+    fontSize: 13,
+    fontWeight: '500',
   },
-  statTitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  quickActions: {
+  statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    marginBottom: themeSpacing.lg,
   },
-  actionButton: {
+  statCardNew: {
+    flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    flexBasis: '48%',
-    marginBottom: 12,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
+    borderRadius: themeRadii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: themeSpacing.md,
+    paddingHorizontal: themeSpacing.md,
+    alignItems: 'flex-start',
+    marginHorizontal: 4,
   },
-  actionText: {
-    fontSize: 14,
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValueNew: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  statLabelNew: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  sectionCard: {
+    backgroundColor: colors.card,
+    borderRadius: themeRadii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: themeSpacing.lg,
+    marginBottom: themeSpacing.lg,
+  },
+  sectionTitleNew: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: themeSpacing.md,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: themeSpacing.md,
+    justifyContent: 'space-between',
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: themeRadii.md,
+    paddingVertical: themeSpacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  actionLabel: {
+    fontSize: 13,
     fontWeight: '600',
     color: colors.text,
-    marginTop: 8,
-    textAlign: 'center',
   },
   tipCard: {
     backgroundColor: colors.card,
@@ -309,10 +347,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tipIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.highlight,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -333,10 +370,10 @@ const styles = StyleSheet.create({
   },
   bannerCard: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: themeRadii.lg,
+    padding: themeSpacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -344,52 +381,18 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6 },
   bannerSub: { fontSize: 13, color: colors.textSecondary },
   bannerCta: {
-    backgroundColor: colors.primary,
+    backgroundColor: theme.primary,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 10,
   },
   bannerCtaTxt: { color: '#fff', fontWeight: '800' },
-  emergencyBanner: {
-    backgroundColor: colors.warning,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emergencyContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  emergencyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  emergencyText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  emergencyButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  emergencyButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.warning,
-  },
-  connectCard: {
+  connectCardNew: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: themeRadii.lg,
+    padding: themeSpacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     gap: 8,
   },
   connectTitle: { fontSize: 16, fontWeight: '700', color: colors.text },

@@ -4,6 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import colors from "../constants/colors";
+import SelectField from '../components/SelectField';
 import api from "../service/api";
 import useAuth from "../hooks/useAuth";
 
@@ -28,6 +29,10 @@ const Signup = () => {
       setLoading(false);
     }
   };
+
+  const BLOOD_TYPES = [
+    'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-',
+  ].map(v => ({ label: v, value: v }));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -74,14 +79,22 @@ const Signup = () => {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Blood Type *</Text>
-              <Controller control={control} name="bloodType"
+              <Controller
+                control={control}
+                name="bloodType"
                 rules={{ required: true }}
                 render={({ field }: any) => (
-                  <TextInput style={styles.input} placeholder="A+, B-, O+, etc" placeholderTextColor="#9aa0a6" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} autoCapitalize="characters" />
+                  <SelectField
+                    label="Blood Type"
+                    required
+                    placeholder="Select blood type"
+                    value={field.value}
+                    options={BLOOD_TYPES}
+                    onChange={(v) => field.onChange(v)}
+                    error={errors?.bloodType ? 'Blood type is required' : undefined}
+                  />
                 )}
               />
-              {errors?.bloodType && <Text style={styles.err}>Blood type is required</Text>}
             </View>
 
             <View style={styles.inputContainer}>

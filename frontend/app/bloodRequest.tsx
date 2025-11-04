@@ -5,13 +5,14 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import api from "../service/api";
+import SelectField from '../components/SelectField';
 
 export default function BloodRequest() {
   const [focusedField, setFocusedField] = useState('');
   const [form, setForm] = useState({
     patientName: '',
     bloodGroup: '' as '' | 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-',
-    district: '' as '' | 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadag'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Waberi'|'Wartanabada'|'Yaqshid',
+    district: '' as '' | 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadaag'|'Howlwadag'|'Kaaran'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Wadajir (Medina)'|'Waberi'|'Wartanabada'|'Wardhiigley (Warta Nabadda)'|'Yaqshid'|'Garasbaley'|'Kahda',
     contactPerson: '',
     contactPhone: '',
     urgentLevel: '' as '' | 'low'|'medium'|'high'|'critical',
@@ -19,10 +20,16 @@ export default function BloodRequest() {
     additionalNote: '',
   });
 
-  const bloodGroups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'] as const;
-  const districts = useMemo(() => [
-    'Abdiaziz','Bondhere','Daynile','Dharkenley','Hamar Jajab','Hamar Weyne','Hodan','Howlwadag','Karaan','Shangani','Shibis','Wadajir','Waberi','Wartanabada','Yaqshid'
-  ] as const, []);
+  const bloodTypeOptions = useMemo(() => (
+    ['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(v => ({ label: v, value: v }))
+  ), []);
+  const districtOptions = useMemo(() => (
+    [
+      'Abdiaziz', 'Bondhere', 'Daynile', 'Dharkenley', 'Hamar Jajab', 'Hamar Weyne', 'Hodan',
+      'Howlwadaag', 'Kaaran', 'Shangani', 'Shibis', 'Wadajir (Medina)', 'Waberi',
+      'Wardhiigley (Warta Nabadda)', 'Yaqshid', 'Garasbaley', 'Kahda'
+    ].map(v => ({ label: v, value: v }))
+  ), []);
   const urgentLevels = ['low','medium','high','critical'] as const;
 
   const update = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
@@ -89,29 +96,25 @@ export default function BloodRequest() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Blood Group *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.rowWrap}>
-              {bloodGroups.map((bg) => (
-                <TouchableOpacity key={bg} style={[styles.chip, form.bloodGroup===bg && styles.chipActive]} onPress={() => update('bloodGroup', bg)}>
-                  <Text style={[styles.chipText, form.bloodGroup===bg && styles.chipTextActive]}>{bg}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
+          <SelectField
+            label="Blood Group"
+            required
+            placeholder="Select Blood Group"
+            value={form.bloodGroup}
+            options={bloodTypeOptions}
+            onChange={(v) => update('bloodGroup', v)}
+          />
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>District *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.rowWrap}>
-              {districts.map((d) => (
-                <TouchableOpacity key={d} style={[styles.chip, form.district===d && styles.chipActive]} onPress={() => update('district', d)}>
-                  <Text style={[styles.chipText, form.district===d && styles.chipTextActive]}>{d}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
+          <SelectField
+            label="District"
+            required
+            placeholder="Select District"
+            value={form.district}
+            options={districtOptions}
+            onChange={(v) => update('district', v)}
+          />
         </View>
 
         <View style={styles.section}>

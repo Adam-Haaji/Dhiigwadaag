@@ -126,7 +126,7 @@ export const api = {
     gender: 'male' | 'female';
     phone: string;
     email: string;
-    district: 'Abdiaziz' | 'Bondhere' | 'Daynile' | 'Dharkenley' | 'Hamar Jajab' | 'Hamar Weyne' | 'Hodan' | 'Howlwadag' | 'Karaan' | 'Shangani' | 'Shibis' | 'Wadajir' | 'Waberi' | 'Wartanabada' | 'Yaqshid';
+    district: 'Abdiaziz' | 'Bondhere' | 'Daynile' | 'Dharkenley' | 'Hamar Jajab' | 'Hamar Weyne' | 'Hodan' | 'Howlwadaag' | 'Howlwadag' | 'Kaaran' | 'Karaan' | 'Shangani' | 'Shibis' | 'Wadajir' | 'Wadajir (Medina)' | 'Waberi' | 'Wartanabada' | 'Wardhiigley (Warta Nabadda)' | 'Yaqshid' | 'Garasbaley' | 'Kahda';
     bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
     weightKg: number;
     consentGiven: boolean;
@@ -139,7 +139,7 @@ export const api = {
   createBloodRequest: (data: {
     patientName: string;
     bloodGroup: 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-';
-    district: 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadag'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Waberi'|'Wartanabada'|'Yaqshid';
+    district: 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadaag'|'Howlwadag'|'Kaaran'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Wadajir (Medina)'|'Waberi'|'Wartanabada'|'Wardhiigley (Warta Nabadda)'|'Yaqshid'|'Garasbaley'|'Kahda';
     contactPerson: string;
     contactPhone: string;
     urgentLevel: 'low'|'medium'|'high'|'critical';
@@ -154,7 +154,7 @@ export const api = {
   verifyDonation: (id: string) => request('PUT', `/api/blood-requests/${id}/verify`),
   uploadProof: (id: string, proofImage: string) => request('PUT', `/api/blood-requests/${id}/proof`, { proofImage }),
   // Available donors
-  getAvailableDonors: (q: { bloodGroup?: 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-'; district?: 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadag'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Waberi'|'Wartanabada'|'Yaqshid'; }) => {
+  getAvailableDonors: (q: { bloodGroup?: 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-'; district?: 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadaag'|'Howlwadag'|'Kaaran'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Wadajir (Medina)'|'Waberi'|'Wartanabada'|'Wardhiigley (Warta Nabadda)'|'Yaqshid'|'Garasbaley'|'Kahda'; }) => {
     const qs = new URLSearchParams();
     if (q.bloodGroup) qs.set('bloodGroup', q.bloodGroup);
     if (q.district) qs.set('district', q.district);

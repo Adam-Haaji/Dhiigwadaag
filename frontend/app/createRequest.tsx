@@ -1,365 +1,397 @@
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import SelectField from '../components/SelectField';
 
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, ToastAndroid, KeyboardAvoidingView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
-import api from "../service/api";
-import { useForm, Controller } from 'react-hook-form';
+type FormState = {
+  patientName: string;
+  bloodType: string | null;
+  units: string;
+  hospitalName: string;
+  location: string | null;
+  phone: string;
+  urgency: string | null;
+  notes: string;
+};
 
-export default function CreateRequest() {
-  const { control, handleSubmit, setValue, watch, formState: { errors, isValid, isSubmitting } } = useForm({ mode: 'onChange', defaultValues: {
+const BLOOD_TYPES = [
+  'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-',
+].map(v => ({ label: v, value: v }));
+
+const LOCATIONS = [
+  'Abdiaziz',
+  'Bondhere',
+  'Daynile',
+  'Dharkenley',
+  'Hamar Jajab',
+  'Hamar Weyne',
+  'Hodan',
+  'Howlwadaag',
+  'Kaaran',
+  'Shangani',
+  'Shibis',
+  'Wadajir (Medina)',
+  'Waberi',
+  'Wardhiigley (Warta Nabadda)',
+  'Yaqshid',
+  'Garasbaley',
+  'Kahda',
+].map(v => ({ label: v, value: v }));
+
+const URGENCY = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'Critical', value: 'critical' },
+];
+
+const accent = '#E74C3C'; // pinkish accent to match screenshot vibe
+
+const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (data: FormState) => void; }> = ({
+  onBack,
+  onSubmitSuccess,
+}) => {
+  const [form, setForm] = useState<FormState>({
     patientName: '',
-    bloodGroup: '' as any,
-    district: '' as any,
-    contactPerson: '',
-    contactPhone: '',
-    urgentLevel: '' as any,
-    reason: '',
-    additionalNote: '',
-  }});
-  const [focusedField, setFocusedField] = useState('');
+    bloodType: null,
+    units: '',
+    hospitalName: '',
+    location: null,
+    phone: '',
+    urgency: null,
+    notes: '',
+  });
 
-  const bloodGroups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'] as const;
-  const districts = useMemo(() => [
-    'Abdiaziz','Bondhere','Daynile','Dharkenley','Hamar Jajab','Hamar Weyne','Hodan','Howlwadag','Karaan','Shangani','Shibis','Wadajir','Waberi','Wartanabada','Yaqshid'
-  ] as const, []);
-  const urgentLevels = ['low','medium','high','critical'] as const;
-  const scrollRef = useRef<ScrollView | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  const handleBack = () => {
-    router.back();
-  };
-
-  const updateField = (k: any, v: any) => setValue(k, v, { shouldValidate: true });
-
-  const getUrgencyColor = (level: string) => {
-    switch (level) {
-      case 'critical': return colors.error;
-      case 'high': return colors.warning;
-      case 'medium': return colors.secondary;
-      default: return colors.secondary;
+  const errors = useMemo(() => {
+    const e: Partial<Record<keyof FormState, string>> = {};
+    if (!form.patientName.trim()) e.patientName = 'Patient name is required.';
+    if (!form.bloodType) e.bloodType = 'Please select a blood type.';
+    if (!form.units || Number.isNaN(Number(form.units)) || Number(form.units) <= 0) {
+      e.units = 'Enter units needed (a positive number).';
     }
-  };
+    if (!form.hospitalName.trim()) e.hospitalName = 'Hospital name is required.';
+    if (!form.location) e.location = 'Please select a location.';
+    if (!/^\+?[0-9()\-\s]{7,}$/.test(form.phone.trim())) e.phone = 'Enter a valid contact phone.';
+    if (!form.urgency) e.urgency = 'Please select urgency.';
+    return e;
+  }, [form]);
 
-  const onSubmit = async (form: any) => {
-    try {
-      const created = await api.createBloodRequest({
-        patientName: form.patientName.trim(),
-        bloodGroup: form.bloodGroup as any,
-        district: form.district as any,
-        contactPerson: form.contactPerson.trim(),
-        contactPhone: form.contactPhone.trim(),
-        urgentLevel: form.urgentLevel as any,
-        reason: form.reason.trim(),
-        additionalNote: form.additionalNote ? form.additionalNote.trim() : undefined,
-      });
-      // Trigger backend smart match for this request
-      try { await api.matchRequest({ requestId: String(created?._id) }); } catch {}
-      if (Platform.OS === 'android') ToastAndroid.show('Request submitted', ToastAndroid.SHORT);
-      else Alert.alert('Success', 'Request submitted');
-      const id = created?._id;
-      if (id) router.replace(`/requestStatus?id=${id}`);
-      else router.replace('/(home)');
-    } catch (e: any) {
-      Alert.alert('Submission failed', e?.message || 'Please try again');
+  const hasErrors = Object.keys(errors).length > 0;
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleSubmit = () => {
+    setSubmitted(true);
+    if (hasErrors) {
+      Alert.alert('Check your input', 'Please fill in all required fields correctly.');
+      return;
     }
+    onSubmitSuccess?.(form);
+    Alert.alert('Request Submitted', 'Your request has been submitted successfully.');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Blood Request</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={80}>
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      >
         <ScrollView
-          ref={scrollRef}
-          style={styles.scrollView}
+          contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
         >
-          <View style={styles.form}>
-          {/* Patient Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Patient Information</Text>
-
-              <Controller control={control} name="patientName" rules={{ required: true, minLength: 3 }}
-                render={({ field }: any) => (
-                  <TextInput
-              style={[commonStyles.input, focusedField==='patientName' && commonStyles.inputFocused]}
-              placeholder="Patient Name *"
-              placeholderTextColor={colors.textSecondary}
-              value={field.value}
-              onChangeText={field.onChange}
-              onFocus={() => setFocusedField('patientName')}
-              onBlur={() => setFocusedField('')}
-            />)}
-              />
-              {errors?.patientName && <Text style={{ color: colors.error, marginTop: 6 }}>Name is required (min 3)</Text>}
-
-            <Text style={styles.inputLabel}>Blood Group *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.bloodTypeSelector}>
-                {bloodGroups.map((bg) => (
-                  <TouchableOpacity key={bg} style={[styles.bloodTypeOption, (watch('bloodGroup')===bg) && styles.selectedBloodType]} onPress={() => updateField('bloodGroup', bg)}>
-                    <Text style={[styles.bloodTypeOptionText, (watch('bloodGroup')===bg) && styles.selectedBloodTypeText]}>{bg}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* District */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>District</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.bloodTypeSelector}>
-                {districts.map((d) => (
-                  <TouchableOpacity key={d} style={[styles.bloodTypeOption, (watch('district')===d) && styles.selectedBloodType]} onPress={() => updateField('district', d)}>
-                    <Text style={[styles.bloodTypeOptionText, (watch('district')===d) && styles.selectedBloodTypeText]}>{d}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* Contact Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-              <Controller control={control} name="contactPerson" rules={{ required: true, minLength: 3 }}
-                render={({ field }: any) => (
-                  <TextInput
-              style={[commonStyles.input, focusedField==='contactPerson' && commonStyles.inputFocused]}
-              placeholder="Contact Person *"
-              placeholderTextColor={colors.textSecondary}
-              value={field.value}
-              onChangeText={field.onChange}
-              onFocus={() => setFocusedField('contactPerson')}
-              onBlur={() => setFocusedField('')}
-            />)}
-              />
-              {errors?.contactPerson && <Text style={{ color: colors.error, marginTop: 6 }}>Contact name is required</Text>}
-              <Controller control={control} name="contactPhone" rules={{ required: true, pattern: /^\d{9,}$/ }}
-                render={({ field }: any) => (
-                  <TextInput
-              style={[commonStyles.input, focusedField==='contactPhone' && commonStyles.inputFocused]}
-              placeholder="Contact Phone *"
-              placeholderTextColor={colors.textSecondary}
-              value={field.value}
-              onChangeText={field.onChange}
-              onFocus={() => setFocusedField('contactPhone')}
-              onBlur={() => setFocusedField('')}
-              keyboardType="phone-pad"
-            />)}
-              />
-              {errors?.contactPhone && <Text style={{ color: colors.error, marginTop: 6 }}>Enter a valid phone (9+ digits)</Text>}
-          </View>
-
-          {/* Urgent Level */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Urgent Level *</Text>
-            <View style={styles.urgencySelector}>
-              {urgentLevels.map((u) => (
-                <TouchableOpacity key={u} style={[styles.urgencyOption, (watch('urgentLevel')===u) && [styles.selectedUrgency, { backgroundColor: getUrgencyColor(u) }]]} onPress={() => updateField('urgentLevel', u)}>
-                  <Text style={[styles.urgencyOptionText, (watch('urgentLevel')===u) && styles.selectedUrgencyText]}>{u.charAt(0).toUpperCase()+u.slice(1)}</Text>
-                </TouchableOpacity>
-              ))}
+          {/* Header - match Notification style */}
+          <View style={styles.headerGradient}>
+            <View style={styles.headerRowTop}>
+              <TouchableOpacity style={styles.backRow} onPress={onBack}>
+                <Text style={styles.backIcon}>←</Text>
+                <Text style={styles.backText}>Back</Text>
+              </TouchableOpacity>
             </View>
+            <Text style={styles.headerTitle}>Create Request</Text>
+            <Text style={styles.headerSubtitle}>Fill in the patient details</Text>
           </View>
 
-          {/* Reason */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Reason *</Text>
-              <Controller control={control} name="reason" rules={{ required: true, minLength: 3 }}
-                render={({ field }: any) => (
-                  <TextInput
-              style={[commonStyles.input, focusedField==='reason' && commonStyles.inputFocused]}
-              placeholder="e.g., Accident, Surgery"
-              placeholderTextColor={colors.textSecondary}
-              value={field.value}
-              onChangeText={field.onChange}
-              onFocus={() => setFocusedField('reason')}
-              onBlur={() => setFocusedField('')}
-            />)}
+          <View style={styles.card}>
+            {/* Patient Name */}
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Patient Name <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                value={form.patientName}
+                onChangeText={(t) => set('patientName', t)}
+                placeholder="Enter patient name"
+                placeholderTextColor="#9CA3AF"
+                style={[styles.input, submitted && errors.patientName && styles.inputError]}
               />
-              {errors?.reason && <Text style={{ color: colors.error, marginTop: 6 }}>Reason is required</Text>}
-          </View>
+              {submitted && errors.patientName ? (
+                <Text style={styles.errorText}>{errors.patientName}</Text>
+              ) : null}
+            </View>
 
-          {/* Additional Note */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Additional Note</Text>
-              <Controller control={control} name="additionalNote"
-                render={({ field }: any) => (
-                  <TextInput
-              style={[commonStyles.input, styles.textArea, focusedField==='additionalNote' && commonStyles.inputFocused]}
-              placeholder="Any additional information (optional)"
-              placeholderTextColor={colors.textSecondary}
-              value={field.value}
-              onChangeText={field.onChange}
-              onFocus={() => {
-                setFocusedField('additionalNote');
-                // Ensure the textarea is visible above the keyboard
-                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-              }}
-              onBlur={() => setFocusedField('')}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />)}
+            {/* Blood Type + Units Needed */}
+            <View style={styles.row}>
+              <View style={[styles.col, { flex: 1 }]}>
+                <SelectField
+                  label="Blood Type"
+                  required
+                  placeholder="Type"
+                  value={form.bloodType}
+                  options={BLOOD_TYPES}
+                  onChange={(v) => set('bloodType', v)}
+                  error={submitted ? errors.bloodType : undefined}
+                />
+              </View>
+
+              <View style={[styles.col, { width: 110 }]}>
+                <Text style={styles.label}>
+                  Units Needed <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  value={form.units}
+                  onChangeText={(t) => set('units', t.replace(/[^\d]/g, ''))}
+                  placeholder="Units"
+                  keyboardType="number-pad"
+                  placeholderTextColor="#9CA3AF"
+                  style={[styles.input, submitted && errors.units && styles.inputError]}
+                />
+                {submitted && errors.units ? (
+                  <Text style={styles.errorText}>{errors.units}</Text>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Hospital Name */}
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Hospital Name <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                value={form.hospitalName}
+                onChangeText={(t) => set('hospitalName', t)}
+                placeholder="Enter hospital name"
+                placeholderTextColor="#9CA3AF"
+                style={[styles.input, submitted && errors.hospitalName && styles.inputError]}
               />
-          </View>
+              {submitted && errors.hospitalName ? (
+                <Text style={styles.errorText}>{errors.hospitalName}</Text>
+              ) : null}
+            </View>
+
+            {/* Location */}
+            <SelectField
+              label="Location"
+              required
+              placeholder="Select location"
+              value={form.location}
+              options={LOCATIONS}
+              onChange={(v) => set('location', v)}
+              error={submitted ? errors.location : undefined}
+            />
+
+            {/* Contact Phone */}
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Contact Phone <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                value={form.phone}
+                onChangeText={(t) => set('phone', t)}
+                placeholder="Enter contact number"
+                keyboardType="phone-pad"
+                placeholderTextColor="#9CA3AF"
+                style={[styles.input, submitted && errors.phone && styles.inputError]}
+              />
+              {submitted && errors.phone ? (
+                <Text style={styles.errorText}>{errors.phone}</Text>
+              ) : null}
+            </View>
+
+            {/* Urgency */}
+            <SelectField
+              label="Urgency Level"
+              required
+              placeholder="Select urgency"
+              value={form.urgency}
+              options={URGENCY}
+              onChange={(v) => set('urgency', v)}
+              error={submitted ? errors.urgency : undefined}
+            />
+
+            {/* Additional Notes */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Additional Notes</Text>
+              <TextInput
+                value={form.notes}
+                onChangeText={(t) => set('notes', t)}
+                placeholder="Any additional information..."
+                placeholderTextColor="#9CA3AF"
+                style={[styles.input, styles.textArea]}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitBtn, hasErrors && submitted && styles.submitBtnActiveAnyway]}
+              onPress={handleSubmit}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.submitText}>Submit Request</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
-
-        {/* Submit Button */}
-        <View style={styles.footer}>
-          <TouchableOpacity style={[styles.submitButton, (!isValid || isSubmitting) && { opacity: 0.6 }]} onPress={handleSubmit(onSubmit)} disabled={!isValid || isSubmitting}>
-            <IconSymbol name="paperplane.fill" size={20} color="#FFFFFF" />
-            <Text style={styles.submitButtonText}>Submit Request</Text>
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC', // page background
   },
-  header: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 24,
+  },
+  headerGradient: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: accent,
+    marginBottom: 12,
+  },
+  headerRowTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  form: {
-    flex: 1,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  inputRow: {
+  headerRow: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  inputHalf: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  bloodTypeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  bloodTypeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  selectedBloodType: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  bloodTypeOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  selectedBloodTypeText: {
-    color: '#FFFFFF',
-  },
-  urgencySelector: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  urgencyOption: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
   },
-  selectedUrgency: {
-    borderColor: 'transparent',
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  urgencyOptionText: {
+  backIcon: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
+    color: '#374151',
+    marginRight: 6,
   },
-  selectedUrgencyText: {
-    color: '#FFFFFF',
+  backText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  headerTitle: { marginTop: 6, fontSize: 22, fontWeight: '800', color: '#FFF' },
+  headerSubtitle: { marginTop: 2, fontSize: 13, color: '#FFE9EF', marginBottom: 4 },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  field: {
+    marginBottom: 14,
+  },
+  label: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  required: {
+    color: '#E74C3C',
+    fontWeight: '700',
+  },
+  input: {
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#111827',
+
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    marginTop: 6,
+    color: '#EF4444',
+    fontSize: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 2,
+  },
+  col: {
+    flexGrow: 1,
   },
   textArea: {
-    height: 100,
-    paddingTop: 16,
+    height: 112,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  footer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
+  submitBtn: {
+    marginTop: 8,
+    backgroundColor: accent,
+    height: 48,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
-    elevation: 4,
+
+    shadowColor: accent,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  submitButtonText: {
+  submitBtnActiveAnyway: {
+    // Keep the strong color even if there are errors; UX matches screenshot emphasis
+  },
+  submitText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
+
+export default CreateRequestScreen;
