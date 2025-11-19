@@ -10,6 +10,6 @@ export default function Button({ title, onPress }: { title: string; onPress?: ()
 }
 
 const styles = StyleSheet.create({
-  btn: { backgroundColor: "#e53935", padding: 12, borderRadius: 8, alignItems: "center" },
+  btn: { backgroundColor: "#FF4747", padding: 12, borderRadius: 8, alignItems: "center" },
   txt: { color: "#fff", fontWeight: "600" },
 });

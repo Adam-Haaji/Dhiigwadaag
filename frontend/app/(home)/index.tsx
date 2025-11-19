@@ -79,7 +79,7 @@ export default function index() {
       >
         {/* Header (match Notification header style) */}
         <LinearGradient
-          colors={[theme.primary, '#C40F45']}
+          colors={[theme.primary, '#FF4747']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -145,7 +145,7 @@ export default function index() {
               </TouchableOpacity>
             </View>
             {diagError && (
-              <View style={[styles.resultBox, { backgroundColor: '#DC2626' }]}> 
+              <View style={[styles.resultBox, { backgroundColor: '#FF4747' }]}> 
                 <Text style={styles.resultHdr}>Error</Text>
                 <Text style={styles.resultTxt}>{diagError}</Text>
               </View>

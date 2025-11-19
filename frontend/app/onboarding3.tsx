@@ -31,8 +31,14 @@ const onboarding3 = () => {
         </Text>
       </View>
 
-      {/* Divider Line */}
-      <View style={styles.divider} />
+      {/* Pagination Dots */}
+      <View style={styles.dotsContainer}>
+        <View style={styles.dot} />
+        <View style={styles.dot} />
+        <View style={[styles.dot, styles.activeDot]} />
+      </View>
+
+      
 
       {/* Get Started Button */}
       <View style={styles.buttonContainer}>
@@ -81,6 +87,21 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.3,
   },
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 40,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F2B6B6',
+    marginHorizontal: 5,
+  },
+  activeDot: {
+    backgroundColor: '#FF6B6B',
+  },
   divider: {
     height: 1,
     backgroundColor: '#e0e0e0',
@@ -92,7 +113,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   button: {
-    backgroundColor: '#000000',
+    backgroundColor: '#FF4747',
     paddingVertical: 16,
     paddingHorizontal: 40,
     borderRadius: 8,

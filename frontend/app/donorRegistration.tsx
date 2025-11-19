@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, Keyboard, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import api from "../service/api";
 import SelectField from '../components/SelectField';
+// Note: Native date picker is optional; we'll lazy-require it to avoid build errors when offline
 
 export default function DonorRegistration() {
   const insets = useSafeAreaInsets();
@@ -23,6 +24,7 @@ export default function DonorRegistration() {
   });
   const [focusedField, setFocusedField] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showIOSDatePicker, setShowIOSDatePicker] = useState(false);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -84,6 +86,22 @@ export default function DonorRegistration() {
     return d ? d.toISOString() : new Date().toISOString();
   };
 
+  const formatDisplayDate = (input: string): string => {
+    const d = parseDate(input);
+    if (!d) return 'mm/dd/yyyy';
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
+  };
+
+  const formatDateForState = (d: Date) => {
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
+  };
+
   const deriveDobFromAge = (ageYears: number): Date => {
     const now = new Date();
     const y = now.getFullYear() - ageYears;
@@ -94,6 +112,31 @@ export default function DonorRegistration() {
   };
 
   const handleBack = () => { router.back(); };
+
+  const openDatePicker = () => {
+    const current = parseDate(formData.lastDonationDate) || new Date();
+    if (Platform.OS === 'android') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
+        DateTimePickerAndroid.open({
+          value: current,
+          mode: 'date',
+          is24Hour: false,
+          maximumDate: new Date(),
+          onChange: (event: any, selectedDate: Date | undefined) => {
+            if (event.type === 'set' && selectedDate) {
+              updateFormData('lastDonationDate', formatDateForState(selectedDate));
+            }
+          },
+        });
+      } catch (e) {
+        Alert.alert('Date picker unavailable', 'Install "@react-native-community/datetimepicker" to pick a date. You can also type mm/dd/yyyy manually.');
+      }
+    } else {
+      setShowIOSDatePicker(true);
+    }
+  };
 
   const handleNext = () => {
     const f = formData;
@@ -261,6 +304,18 @@ export default function DonorRegistration() {
             keyboardType="numeric"
           />
 
+          <Text style={styles.inputLabel}>Last Donation Date</Text>
+          <TouchableOpacity
+            style={[commonStyles.input, styles.dateInput]}
+            activeOpacity={0.7}
+            onPress={openDatePicker}
+          >
+            <Text style={[styles.dateText, !formData.lastDonationDate && styles.datePlaceholder]}>
+              {formData.lastDonationDate ? formatDisplayDate(formData.lastDonationDate) : 'mm/dd/yyyy'}
+            </Text>
+            <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
           <View style={styles.inputGroup}>
             <SelectField
               label="Availability"
@@ -277,6 +332,43 @@ export default function DonorRegistration() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* iOS Date Picker Modal */}
+      {Platform.OS === 'ios' && (
+        <Modal transparent visible={showIOSDatePicker} animationType="fade" onRequestClose={() => setShowIOSDatePicker(false)}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowIOSDatePicker(false)}>
+            <View style={styles.modalSheet}>
+              {(() => {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-var-requires
+                  const DT = require('@react-native-community/datetimepicker').default;
+                  return (
+                    <DT
+                      value={parseDate(formData.lastDonationDate) || new Date()}
+                      mode="date"
+                      display="spinner"
+                      maximumDate={new Date()}
+                      onChange={(_: any, selectedDate: Date | undefined) => {
+                        if (selectedDate) updateFormData('lastDonationDate', formatDateForState(selectedDate));
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  );
+                } catch (e) {
+                  return (
+                    <Text style={{ color: colors.text }}>
+                      Date picker is not available. Install "@react-native-community/datetimepicker" to enable native selection.
+                    </Text>
+                  );
+                }
+              })()}
+              <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowIOSDatePicker(false)}>
+                <Text style={styles.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -301,4 +393,11 @@ const styles = StyleSheet.create({
   dropdownTextSelected: { fontWeight: '700', color: colors.primary },
   registerBtn: { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 8 },
   registerBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  dateInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateText: { color: colors.text, fontSize: 16 },
+  datePlaceholder: { color: colors.textSecondary },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderColor: colors.border, borderTopWidth: 1 },
+  modalDoneBtn: { marginTop: 12, alignSelf: 'flex-end', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  modalDoneText: { color: '#fff', fontWeight: '700' },
 });
