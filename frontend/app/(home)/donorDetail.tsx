@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, Alert, Act
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import api from '@/service/api';
+import apiClient from '@/service/api';
 
 function normalizePhone(raw?: string): string {
   if (!raw) return '';
@@ -33,7 +33,7 @@ export default function DonorDetail() {
       if (!id) return;
       setLoading(true);
       try {
-        const data = await api.getDonorProfile(id);
+  const data = await apiClient.getDonorProfile(id);
         if (mounted) setProfile(data);
       } catch (e: any) {
         // Keep fallback params if fetch fails

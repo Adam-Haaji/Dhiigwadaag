@@ -1,36 +1,34 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Stack, router } from "expo-router";
-import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity, Dimensions } from "react-native";
+import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity, Animated } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, commonStyles } from "@/styles/commonStyles";
-import { api, getBaseUrl } from "@/service/api";
-import { colors as theme, spacing as themeSpacing, radii as themeRadii } from "@/constants/theme";
+import { api } from "@/service/api";
+import { colors as theme, spacing as themeSpacing, radii as themeRadii, moderateScale, responsiveFont } from "@/constants/theme";
 // Connectivity diagnostics removed per request
 
 // Lazy-load LinearGradient like in Notifications to keep consistent header rendering
 let LinearGradient: any;
 try { LinearGradient = require('expo-linear-gradient').LinearGradient; } catch { LinearGradient = View; }
 
-export default function index() {
-  // Diagnostics state removed
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [diagResult, setDiagResult] = useState<any>(null);
-  const [diagError, setDiagError] = useState<string | null>(null);
+export default function HomeIndex() {
+  const { user } = require('@/hooks/useAuth').default();
+  const role = String(user?.user?.role || '').toLowerCase();
+  // Removed old diagnostics state & handler (visual-only upgrade).
 
-  const onCheckHealth = useCallback(async () => {
-    setDiagLoading(true);
-    setDiagError(null);
-    try {
-      const res = await api.health();
-      setDiagResult(res);
-    } catch (e: any) {
-      setDiagError(e?.message || String(e));
-      setDiagResult(null);
-    } finally {
-      setDiagLoading(false);
-    }
-  }, []);
+  // Pulse animation for Emergency action
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1200, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
 
   // Connectivity diagnostics handlers removed
   const stats = [
@@ -111,55 +109,45 @@ export default function index() {
         </View>
 
         {/* Quick Actions */}
+        {role !== 'none' && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitleNew}>Quick Actions</Text>
           <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/createRequest')}>
-              <View style={styles.actionIcon}>
-                <IconSymbol name="doc.text" size={18} color={colors.text} />
-              </View>
-              <Text style={styles.actionLabel}>Request Blood</Text>
+            {/* Request Blood (Primary CTA) */}
+            {(role === 'requester' || role === 'both' || role === 'admin') && (
+            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push('/createRequest')} activeOpacity={0.9}>
+              <LinearGradient colors={[theme.primary, '#E53935']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGradient}>
+                <View style={[styles.actionIcon, styles.actionIconPrimary]}> 
+                  <IconSymbol name="drop.fill" size={20} color="#FFFFFF" />
+                </View>
+                <Text style={[styles.actionLabel, styles.actionLabelPrimary]}>Request Blood</Text>
+              </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/emergencyRequest')}>
-              <View style={styles.actionIcon}>
-                <IconSymbol name="phone.fill" size={18} color={colors.text} />
-              </View>
-              <Text style={styles.actionLabel}>Emergency</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Diagnostics (safe) */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleNew}>Diagnostics</Text>
-          <View style={styles.connectCardNew}>
-            <Text style={styles.connectTitle}>Backend Health</Text>
-            <Text style={styles.connectSub}>API Base: {getBaseUrl()}</Text>
-            <View style={styles.connectButtons}>
-              <TouchableOpacity
-                onPress={onCheckHealth}
-                disabled={diagLoading}
-                style={[styles.connectBtn, { backgroundColor: diagLoading ? '#9CA3AF' : theme.info }]}
+            )}
+            {/* Emergency Alert (Pulse emphasis) */}
+            {(role === 'requester' || role === 'both' || role === 'admin') && (
+            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]} onPress={() => router.push('/emergencyRequest')} activeOpacity={0.9}>
+              <Animated.View
+                style={[styles.actionGradient, styles.actionGradientEmergency, {
+                  transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }],
+                  shadowOpacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.4] })
+                }]}
               >
-                <Text style={styles.connectBtnTxt}>{diagLoading ? 'Checking…' : 'Check Health'}</Text>
-              </TouchableOpacity>
-            </View>
-            {diagError && (
-              <View style={[styles.resultBox, { backgroundColor: '#FF4747' }]}> 
-                <Text style={styles.resultHdr}>Error</Text>
-                <Text style={styles.resultTxt}>{diagError}</Text>
-              </View>
-            )}
-            {diagResult && (
-              <View style={[styles.resultBox, { backgroundColor: '#065F46' }]}> 
-                <Text style={styles.resultHdr}>/api/health</Text>
-                <Text style={styles.resultTxtMono}>{JSON.stringify(diagResult)}</Text>
-              </View>
+                <View style={[styles.actionIcon, styles.actionIconDanger]}> 
+                  <IconSymbol name="bell.fill" size={20} color="#FFFFFF" />
+                </View>
+                <Text style={[styles.actionLabel, styles.actionLabelDanger]}>Emergency Alert</Text>
+              </Animated.View>
+            </TouchableOpacity>
             )}
           </View>
         </View>
+        )}
+
+        {/* Diagnostics section removed per request */}
 
         {/* Donor Registration Banner */}
+        {(role === 'donor' || role === 'both' || role === 'admin') && (
         <View style={styles.sectionCard}>
           <View style={styles.bannerCard}>
             <View style={{ flex: 1 }}>
@@ -175,6 +163,7 @@ export default function index() {
             </TouchableOpacity>
           </View>
         </View>
+        )}
 
         {/* Blood Donation Tips */}
         <View style={styles.sectionCard}>
@@ -248,14 +237,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: responsiveFont(22),
     fontWeight: '800',
     letterSpacing: 0.2,
     marginBottom: 2,
   },
   headerSubtitle: {
     color: '#FFE9EF',
-    fontSize: 13,
+    fontSize: responsiveFont(13),
     fontWeight: '500',
   },
   statRow: {
@@ -283,13 +272,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statValueNew: {
-    fontSize: 22,
+    fontSize: responsiveFont(22),
     fontWeight: '800',
     color: colors.text,
     marginBottom: 2,
   },
   statLabelNew: {
-    fontSize: 12,
+    fontSize: responsiveFont(12),
     color: colors.textSecondary,
   },
   sectionCard: {
@@ -301,7 +290,7 @@ const styles = StyleSheet.create({
     marginBottom: themeSpacing.lg,
   },
   sectionTitleNew: {
-    fontSize: 16,
+    fontSize: responsiveFont(16),
     fontWeight: '700',
     color: colors.text,
     marginBottom: themeSpacing.md,
@@ -313,29 +302,56 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: themeRadii.md,
-    paddingVertical: themeSpacing.lg,
+    borderRadius: themeRadii.lg,
+    overflow: 'hidden',
+  },
+  actionGradient: {
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: moderateScale(themeSpacing.lg),
+    paddingHorizontal: moderateScale(themeSpacing.md),
+    gap: moderateScale(8),
+  },
+  actionBtnPrimary: {
+    backgroundColor: theme.primary,
+    shadowColor: '#C62828',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  actionBtnDanger: {
+    backgroundColor: '#E53935',
+    shadowColor: '#E53935',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  actionGradientEmergency: {
+    backgroundColor: '#E53935',
   },
   actionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(21),
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  actionIconPrimary: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  actionIconDanger: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   actionLabel: {
-    fontSize: 13,
+    fontSize: responsiveFont(13),
     fontWeight: '600',
-    color: colors.text,
   },
+  actionLabelPrimary: { color: '#FFFFFF', letterSpacing: 0.3 },
+  actionLabelDanger: { color: '#FFFFFF', letterSpacing: 0.3 },
   tipCard: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -358,15 +374,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tipTitle: {
-    fontSize: 16,
+    fontSize: responsiveFont(16),
     fontWeight: '600',
     color: colors.text,
     marginBottom: 4,
   },
   tipDescription: {
-    fontSize: 14,
+    fontSize: responsiveFont(14),
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: responsiveFont(20),
   },
   bannerCard: {
     backgroundColor: colors.card,
@@ -378,8 +394,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  bannerTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6 },
-  bannerSub: { fontSize: 13, color: colors.textSecondary },
+  bannerTitle: { fontSize: responsiveFont(16), fontWeight: '800', color: colors.text, marginBottom: 6 },
+  bannerSub: { fontSize: responsiveFont(13), color: colors.textSecondary },
   bannerCta: {
     backgroundColor: theme.primary,
     paddingVertical: 10,

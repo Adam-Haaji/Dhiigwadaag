@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import api, { getBaseUrl } from '../../service/api';
+import api from '../../service/api';
 import { useFocusEffect } from '@react-navigation/native';
 
 // Lazy-load LinearGradient to avoid type resolution issues in some setups
@@ -215,10 +215,7 @@ export default function NotificationScreen() {
             </ScrollView>
           )}
 
-          {/* Dev helper - API base URL */}
-          {__DEV__ && (
-            <Text style={styles.devInfo}>API: {getBaseUrl()}</Text>
-          )}
+          {/* Removed dev helper displaying API base URL for security */}
 
           {/* List */}
           {filtered.length === 0 ? (
@@ -474,5 +471,5 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#E53935',
   },
-  devInfo: { color: colors.textSecondary, fontSize: 12, marginBottom: 12 },
+  // devInfo removed: no longer exposing internal API details
 });

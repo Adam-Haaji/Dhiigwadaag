@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Switch,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, router } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
-import api from "../../service/api";
+import apiClient from "../../service/api";
 import * as ImagePicker from 'expo-image-picker';
-import useAuth from "../../hooks/useAuth";
+import useAuthHook from "../../hooks/useAuth";
 
 const colors = {
   background: "#F5F7FA",
@@ -23,13 +23,13 @@ const colors = {
 export default function ProfileScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [userProfile, setUserProfile] = useState<any>({});
-  const { logout } = useAuth();
+  const { logout } = useAuthHook();
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const me = await api.me();
+  const me = await apiClient.me();
         setUserProfile(me || {});
         if (typeof me?.availability === 'boolean') setIsAvailable(!!me.availability);
       } catch {}
@@ -107,8 +107,8 @@ export default function ProfileScreen() {
                 if (!/^https?:\/\//i.test(asset.uri)) {
                   Alert.alert('Upload needed', 'Please configure image upload to obtain a public URL. Storing local file URI is not supported across sessions.');
                 }
-                await api.updateMe({ avatarUrl: asset.uri });
-                const me = await api.me();
+                await apiClient.updateMe({ avatarUrl: asset.uri });
+                const me = await apiClient.me();
                 setUserProfile(me || {});
               } catch (e: any) {
                 Alert.alert('Avatar update failed', e?.message || 'Unknown error');
@@ -122,8 +122,8 @@ export default function ProfileScreen() {
               <TouchableOpacity style={[styles.editAvatarButton, { right: 40, backgroundColor: colors.error }]} onPress={async () => {
                 try {
                   setUpdatingAvatar(true);
-                  await api.updateMe({ avatarUrl: '' });
-                  const me = await api.me();
+                  await apiClient.updateMe({ avatarUrl: '' });
+                  const me = await apiClient.me();
                   setUserProfile(me || {});
                 } catch (e: any) {
                   Alert.alert('Remove failed', e?.message || 'Unknown error');

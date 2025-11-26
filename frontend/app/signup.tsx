@@ -4,22 +4,21 @@ import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import colors from "../constants/colors";
-import SelectField from '../components/SelectField';
-import api from "../service/api";
-import useAuth from "../hooks/useAuth";
+import SelectFieldComponent from '../components/SelectField';
+import apiClient from "../service/api";
 
 const Signup = () => {
   const router = useRouter();
   const { control, handleSubmit, watch, formState: { errors, isValid, isSubmitting } } = useForm({ mode: 'onChange', defaultValues: { name: '', email: '', phone: '', bloodType: '', password: '', confirmPassword: '' } });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setUser } = useAuth();
+  // Auth hook not needed here (no immediate login after signup)
 
   const onSubmit = async ({ name, email, phone, bloodType, password, confirmPassword }: any) => {
     setError(null);
     setLoading(true);
     try {
-      await api.signup({ name, email, password, bloodType, role: 'Requester', location: 'Unknown', phone });
+  await apiClient.signup({ name, email, password, bloodType, role: 'Requester', location: 'Unknown', phone });
       // Do NOT auto-login; redirect user to login screen after successful signup
       alert('Account created successfully. Please login.');
       router.replace('/login');
@@ -84,7 +83,7 @@ const Signup = () => {
                 name="bloodType"
                 rules={{ required: true }}
                 render={({ field }: any) => (
-                  <SelectField
+                  <SelectFieldComponent
                     label="Blood Type"
                     required
                     placeholder="Select blood type"

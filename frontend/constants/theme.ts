@@ -81,3 +81,61 @@ export const radii = {
   xl: 22,
   pill: 999,
 } as const;
+
+// Responsive design additions --------------------------------------------------
+// Base guideline sizes (iPhone X reference) – used for scale calculations.
+const BASE_WIDTH = 375;
+const BASE_HEIGHT = 812;
+
+// Breakpoints (width in dp). These are advisory; we keep layout fluid via flex.
+export const breakpoints = {
+  xs: 0,      // very small devices
+  sm: 360,    // small phones (older Android)
+  md: 400,    // mainstream phones
+  lg: 480,    // large phones / small tablets
+  xl: 600,    // tablets / foldables portrait
+} as const;
+
+// Responsive scaling helpers (no dependency on hooks so can be imported anywhere)
+import { Dimensions, PixelRatio } from 'react-native';
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export const scale = (size: number) => (SCREEN_WIDTH / BASE_WIDTH) * size;
+export const verticalScale = (size: number) => (SCREEN_HEIGHT / BASE_HEIGHT) * size;
+export const moderateScale = (size: number, factor = 0.35) => {
+  const scaled = scale(size);
+  return size + (scaled - size) * factor; // damped scaling for better consistency
+};
+export const responsiveFont = (size: number) => {
+  // Use moderate scale then round to nearest pixel for crisp rendering
+  return PixelRatio.roundToNearestPixel(moderateScale(size));
+};
+
+// Container width limits for large screens (keep central column consistent)
+export const layout = {
+  maxContentWidth: 680,
+  gutter: spacing.md,
+};
+
+// Adaptive typography mapping (device-aware sizes)
+export const typeScale = {
+  h1: { fontSize: responsiveFont(28), lineHeight: responsiveFont(34) },
+  h2: { fontSize: responsiveFont(22), lineHeight: responsiveFont(28) },
+  h3: { fontSize: responsiveFont(18), lineHeight: responsiveFont(24) },
+  body: { fontSize: responsiveFont(15), lineHeight: responsiveFont(22) },
+  label: { fontSize: responsiveFont(13), lineHeight: responsiveFont(18) },
+  caption: { fontSize: responsiveFont(11), lineHeight: responsiveFont(14) },
+};
+
+// Utility to pick spacing token by semantic size with optional scale
+export const rs = (token: keyof typeof spacing, autoScale: boolean = true) => {
+  const base = spacing[token];
+  return autoScale ? Math.round(moderateScale(base)) : base;
+};
+
+// Convenience boolean flags
+export const deviceSize = {
+  isSmall: SCREEN_WIDTH < breakpoints.md,
+  isLarge: SCREEN_WIDTH >= breakpoints.lg,
+};
+

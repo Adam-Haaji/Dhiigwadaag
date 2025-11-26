@@ -3,6 +3,14 @@ import Donor from '../models/Donor.js';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
+function computeMenus(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'both' || r === 'admin') return ['home', 'donor', 'request', 'notification', 'profile'];
+  if (r === 'donor') return ['home', 'donor', 'notification', 'profile'];
+  if (r === 'requester') return ['home', 'request', 'notification', 'profile'];
+  return ['home'];
+}
+
 export const createBloodRequest = async (req, res) => {
   try {
     const requesterId = req?.user?.id || req?.user?._id;
@@ -12,6 +20,7 @@ export const createBloodRequest = async (req, res) => {
       patientName,
       bloodGroup,
       district,
+      units,
       contactPerson,
       contactPhone,
       urgentLevel,
@@ -28,6 +37,9 @@ export const createBloodRequest = async (req, res) => {
     if (required.some((v) => v === undefined || v === null || String(v).trim() === '')) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (!Number.isFinite(Number(units)) || Number(units) < 1) {
+      return res.status(400).json({ error: 'Invalid units: must be a positive number' });
+    }
     // lightweight phone sanity
     if (!/^[0-9+\-()\s]{6,20}$/.test(String(contactPhone))) {
       return res.status(400).json({ error: 'Invalid contact phone' });
@@ -37,6 +49,7 @@ export const createBloodRequest = async (req, res) => {
       patientName: String(patientName).trim(),
       bloodGroup,
       district: district || String(contactInfo || '').trim() || 'Unknown',
+      units: (Number.isFinite(Number(units)) && Number(units) >= 1) ? Number(units) : 1,
       contactPerson: String(contactPerson).trim(),
       contactPhone: String(contactPhone).trim(),
       urgentLevel,
@@ -137,7 +150,29 @@ export const createBloodRequest = async (req, res) => {
       // Matching/notification failure shouldn't break request creation
       console.error('Auto-match error:', err?.message || err);
     }
-    return res.status(201).json(doc);
+    // Update requesting user's role -> requester/both
+    let updatedUser = null;
+    try {
+      const user = await User.findById(requesterId);
+      if (user) {
+        const current = String(user.role || '').toLowerCase();
+        user.role = (current === 'donor' || current === 'both') ? 'both' : 'requester';
+        await user.save();
+        updatedUser = {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          donorStatus: user.donorStatus,
+          unavailableUntil: user.unavailableUntil,
+          menus: computeMenus(user.role),
+        };
+      }
+    } catch (e) {
+      console.error('Failed to update user to requester/both:', e?.message || e);
+    }
+
+    return res.status(201).json({ request: doc, user: updatedUser });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

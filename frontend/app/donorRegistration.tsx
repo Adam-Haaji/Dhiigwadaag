@@ -5,10 +5,12 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import api from "../service/api";
+import useAuth from "@/hooks/useAuth";
 import SelectField from '../components/SelectField';
 // Note: Native date picker is optional; we'll lazy-require it to avoid build errors when offline
 
 export default function DonorRegistration() {
+  const { setUser, user } = useAuth();
   const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({
     fullName: '',
@@ -21,6 +23,7 @@ export default function DonorRegistration() {
     weightKg: '',
     lastDonationDate: '',
     availabilityStatus: '',
+    hb: '',
   });
   const [focusedField, setFocusedField] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -54,10 +57,10 @@ export default function DonorRegistration() {
       'Shibis',
       'Wadajir (Medina)',
       'Waberi',
-      'Wardhiigley (Warta Nabadda)',
+      'Warta Nabadda',
       'Yaqshid',
       'Garasbaley',
-      'Kahda',
+      'Kaxda',
     ].map(v => ({ label: v, value: v }))
   ), []);
   const totalSteps = 1;
@@ -117,7 +120,7 @@ export default function DonorRegistration() {
     const current = parseDate(formData.lastDonationDate) || new Date();
     if (Platform.OS === 'android') {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
         DateTimePickerAndroid.open({
           value: current,
@@ -138,53 +141,72 @@ export default function DonorRegistration() {
     }
   };
 
-  const handleNext = () => {
-    const f = formData;
-    const ageNum = Number(f.age);
-    const weight = Number(f.weightKg);
+  const validationErrors = useMemo(() => {
+    const errs: Record<string,string> = {};
+    const ageNum = Number(formData.age);
+    const weightNum = Number(formData.weightKg);
+    const hbNum = Number(formData.hb);
+    if (!formData.age) errs.age = 'Age required';
+    if (!Number.isFinite(ageNum) || ageNum < 18) errs.age = "Da'daadu waa ka yar tahay 18";
+    else if (ageNum > 65) errs.age = "Da'daadu waa ka weyn tahay 65";
+    if (!formData.weightKg) errs.weightKg = 'Weight required';
+    else if (weightNum < 50) errs.weightKg = 'Miisaankaaga waa <50kg';
+    if (!formData.gender) errs.gender = 'Gender required';
+    if (!formData.hb) errs.hb = 'HB required';
+    else if (formData.gender === 'Male' && hbNum < 13) errs.hb = 'HB-gaagu waa hooseeya (rag)';
+    else if (formData.gender === 'Female' && hbNum < 12) errs.hb = 'HB-gaagu waa hooseeya (dumar)';
+    if (!formData.bloodGroup) errs.bloodGroup = 'Blood type required';
+    if (!formData.district) errs.district = 'Location required';
+    if (!phoneRegex.test(formData.phone.trim())) errs.phone = 'Invalid phone';
+    // Cooldown (use existing user lastDonationDate if present)
+    const last = user?.user?.lastDonationDate ? new Date(user.user.lastDonationDate) : null;
+    if (last && !isNaN(last.getTime())) {
+      const nextEligible = new Date(last.getTime() + 90*24*60*60*1000);
+      if (nextEligible.getTime() > Date.now()) {
+        errs.cooldown = `Waad dhawaan dhiig bixi⁠day; sug ilaa ${nextEligible.toLocaleDateString()}`;
+      }
+    }
+    return errs;
+  }, [formData, phoneRegex, user]);
 
-    if (
-      !f.fullName.trim() || 
-      !f.email.trim() ||
-      !phoneRegex.test(f.phone.trim()) ||
-      !f.gender || 
-      !f.district || 
-      !f.bloodGroup ||
-      !f.availabilityStatus ||
-      !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 80 ||
-      !Number.isFinite(weight) || weight < 50
-    ) {
-      Alert.alert('Xog aan sax ahayn', 'Fadlan buuxi xogta saxda ah oo dhan.');
+  const isValid = useMemo(() => Object.keys(validationErrors).length === 0, [validationErrors]);
+
+  const handleNext = () => {
+    if (!isValid) {
+      Alert.alert('Validation', 'Fadlan sax khaladaadka.');
       return;
     }
-
     handleSubmit();
   };
 
+  const [submitting, setSubmitting] = useState(false);
+  const [ineligibleReason, setIneligibleReason] = useState<string | null>(null);
+
   const handleSubmit = async () => {
+    setSubmitting(true);
+    setIneligibleReason(null);
     try {
-      const ageNum = Number(formData.age);
-      const dob = deriveDobFromAge(Number.isFinite(ageNum) ? ageNum : 25);
-      const availability = formData.availabilityStatus.toLowerCase() === 'available' ? 'available' : 'unavailable';
-      await api.createDonor({
-        fullName: formData.fullName.trim(),
-        dateOfBirth: dob.toISOString(),
-        gender: (formData.gender.toLowerCase() as 'male' | 'female'),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        district: formData.district as any,
-        bloodGroup: formData.bloodGroup as any,
+      const resp: any = await api.registerDonorEligibility({
+        age: Number(formData.age),
         weightKg: Number(formData.weightKg),
-        consentGiven: true,
-        emergencyContact: { name: formData.fullName.trim(), relationship: 'self', phone: formData.phone.trim() },
-        lastDonationDate: toIso(formData.lastDonationDate),
-        availabilityStatus: availability,
+        gender: formData.gender.toLowerCase() === 'male' ? 'male' : 'female',
+        hb: Number(formData.hb),
+        bloodType: formData.bloodGroup,
+        location: formData.district,
       });
-      Alert.alert('Success', 'Donor registration submitted successfully.', [
-        { text: 'OK', onPress: () => router.replace('/(home)') },
-      ]);
+      if (resp?.success) {
+        if (resp?.user) await setUser({ ...(user || {}), user: resp.user });
+        Alert.alert('Eligibility', 'You are eligible to donate.', [
+          { text: 'OK', onPress: () => router.replace('/(home)') },
+        ]);
+      } else {
+        throw new Error(resp?.reason || 'Unknown response');
+      }
     } catch (e: any) {
-      Alert.alert('Registration failed', e?.message || 'Please try again');
+      const msg = e?.message || 'Failed';
+      setIneligibleReason(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -291,6 +313,7 @@ export default function DonorRegistration() {
             keyboardType="number-pad"
             inputMode="numeric"
           />
+          {validationErrors.age && <Text style={styles.errorText}>{validationErrors.age}</Text>}
 
           <Text style={styles.inputLabel}>Weight (kg)</Text>
           <TextInput
@@ -303,6 +326,20 @@ export default function DonorRegistration() {
             onBlur={() => setFocusedField('')}
             keyboardType="numeric"
           />
+          {validationErrors.weightKg && <Text style={styles.errorText}>{validationErrors.weightKg}</Text>}
+
+          <Text style={styles.inputLabel}>Hemoglobin (HB)</Text>
+          <TextInput
+            style={[commonStyles.input, focusedField === 'hb' && commonStyles.inputFocused]}
+            placeholder="HB g/dL"
+            placeholderTextColor={colors.textSecondary}
+            value={formData.hb}
+            onChangeText={(v) => updateFormData('hb', v.replace(/[^0-9.]/g,'').slice(0,5))}
+            onFocus={() => setFocusedField('hb')}
+            onBlur={() => setFocusedField('')}
+            keyboardType="decimal-pad"
+          />
+          {validationErrors.hb && <Text style={styles.errorText}>{validationErrors.hb}</Text>}
 
           <Text style={styles.inputLabel}>Last Donation Date</Text>
           <TouchableOpacity
@@ -315,21 +352,33 @@ export default function DonorRegistration() {
             </Text>
             <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+            <View style={styles.inputGroup}>
+              <SelectField
+                label="Availability"
+                required
+                placeholder="Select availability"
+                value={formData.availabilityStatus}
+                options={[{ label: 'Available', value: 'Available' }, { label: 'Unavailable', value: 'Unavailable' }]}
+                onChange={(v: string) => updateFormData('availabilityStatus', v)}
+              />
+            </View>
 
-          <View style={styles.inputGroup}>
-            <SelectField
-              label="Availability"
-              required
-              placeholder="Select availability"
-              value={formData.availabilityStatus}
-              options={[{ label: 'Available', value: 'Available' }, { label: 'Unavailable', value: 'Unavailable' }]}
-              onChange={(v: string) => updateFormData('availabilityStatus', v)}
-            />
-          </View>
+            <TouchableOpacity
+              style={[styles.registerBtn, (!isValid || submitting) && { opacity: 0.5 } ]}
+              activeOpacity={isValid && !submitting ? 0.7 : 1}
+              onPress={isValid && !submitting ? handleNext : undefined}
+            >
+              <Text style={styles.registerBtnText}>{submitting ? 'Submitting...' : 'Register'}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.registerBtn} onPress={handleNext}>
-            <Text style={styles.registerBtnText}>Register</Text>
-          </TouchableOpacity>
+            {validationErrors.cooldown && <Text style={styles.errorText}>{validationErrors.cooldown}</Text>}
+            {ineligibleReason && (
+              <View style={styles.ineligibleBox}>
+                <Text style={styles.ineligibleTitle}>Ineligible</Text>
+                <Text style={styles.ineligibleReason}>{ineligibleReason}</Text>
+                <Text style={styles.ineligibleHint}>Consult a clinician or update data to become eligible.</Text>
+              </View>
+            )}
         </View>
       </ScrollView>
 
@@ -340,7 +389,7 @@ export default function DonorRegistration() {
             <View style={styles.modalSheet}>
               {(() => {
                 try {
-                  // eslint-disable-next-line @typescript-eslint/no-var-requires
+                   
                   const DT = require('@react-native-community/datetimepicker').default;
                   return (
                     <DT
@@ -357,7 +406,7 @@ export default function DonorRegistration() {
                 } catch (e) {
                   return (
                     <Text style={{ color: colors.text }}>
-                      Date picker is not available. Install "@react-native-community/datetimepicker" to enable native selection.
+                      Date picker is not available. Install &quot;@react-native-community/datetimepicker&quot; to enable native selection.
                     </Text>
                   );
                 }
@@ -400,4 +449,9 @@ const styles = StyleSheet.create({
   modalSheet: { backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderColor: colors.border, borderTopWidth: 1 },
   modalDoneBtn: { marginTop: 12, alignSelf: 'flex-end', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   modalDoneText: { color: '#fff', fontWeight: '700' },
+  errorText: { color: colors.error, marginTop: 6, fontSize: 13 },
+  ineligibleBox: { marginTop: 16, padding: 12, borderRadius: 10, backgroundColor: '#ffe6e6', borderWidth: 1, borderColor: colors.error },
+  ineligibleTitle: { fontWeight: '700', color: colors.error, marginBottom: 4 },
+  ineligibleReason: { color: colors.error, marginBottom: 6 },
+  ineligibleHint: { color: colors.textSecondary, fontSize: 12 },
 });

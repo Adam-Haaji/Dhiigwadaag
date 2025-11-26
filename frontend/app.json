@@ -28,9 +28,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.blooddonation.dev"
     },
-    "web": {
-      "output": "static"
-    },
+    
     "plugins": [
       "expo-router",
       "expo-notifications"

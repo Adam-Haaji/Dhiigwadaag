@@ -43,6 +43,8 @@ const MAPPING = {
   "bell": "notifications-none",
   "heart.fill": "favorite",
   "heart": "favorite-border",
+  "hand.thumbsup.fill": "thumb-up",
+  "hand.thumbsup": "thumb-up-off-alt",
 
   // Actions & Controls
   "plus": "add",
@@ -155,6 +157,7 @@ const MAPPING = {
   "person.fill": "person",
   "person.2.fill": "group",
   "person.2": "group",
+  "person.badge.plus": "person-add",
   "person.circle.fill": "account-circle",
   "person.circle": "account-circle",
   "person.crop.circle.fill": "account-circle",

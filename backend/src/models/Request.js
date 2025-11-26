@@ -8,9 +8,11 @@ const requestSchema = new mongoose.Schema({
   bloodType: { type: String, required: true },
   location: { type: String, required: true },
   urgency: { type: String, enum: ['Normal', 'Urgent', 'Critical'], required: true },
+  // Units of blood requested (bags)
+  units: { type: Number, min: 1, default: 1 },
 
   // Required status per spec
-  status: { type: String, enum: ['Pending', 'Contacted', 'Matched', 'Fulfilled', 'Cancelled'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Contacted', 'Matched', 'Accepted', 'Fulfilled', 'Cancelled'], default: 'Pending' },
 
   // New: requester embedded object
   requester: {
@@ -40,6 +42,9 @@ const requestSchema = new mongoose.Schema({
   // Legacy/compatibility fields retained
   requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   matchedDonorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Priority matching metadata (optional)
+  matchedTier: { type: String },
+  tierUsed: [{ type: String }],
 }, { timestamps: true });
 
 export default mongoose.model('Request', requestSchema);

@@ -1,12 +1,34 @@
 
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
+import useAuth from '@/hooks/useAuth';
+import api from '@/service/api';
 
 export default function RequestScreen() {
+  const { user } = useAuth();
+  const role = String(user?.user?.role || '').toLowerCase();
+  const [active, setActive] = useState<any[]>([]);
+  const [past, setPast] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    if (!(role === 'requester' || role === 'both' || role === 'admin')) return;
+    try {
+      const list: any[] = await api.listRequests();
+      const a = list.filter((r: any) => !['fulfilled','completed','cancelled','Fulfilled','Cancelled'].includes(String(r.status).toLowerCase()));
+      const p = list.filter((r: any) => ['fulfilled','completed','cancelled','Fulfilled','Cancelled'].includes(String(r.status).toLowerCase()));
+      setActive(a);
+      setPast(p);
+    } catch {}
+  }, [role]);
+  useEffect(() => {
+    if (!(role === 'requester' || role === 'both' || role === 'admin')) {
+      router.replace('/role');
+    }
+    load();
+  }, [role]);
   const handleCreateRequest = () => {
     router.push('/createRequest');
   };
@@ -94,6 +116,13 @@ export default function RequestScreen() {
           </View>
         </View>
 
+        {/* Dashboard Stats */}
+        <View style={styles.dashboardCard}>
+          <Text style={styles.dashboardTitle}>My Requests</Text>
+          <View style={styles.dashboardRow}><Text style={styles.dashboardLabel}>Active:</Text><Text style={styles.dashboardValue}>{active.length}</Text></View>
+          <View style={styles.dashboardRow}><Text style={styles.dashboardLabel}>Past:</Text><Text style={styles.dashboardValue}>{past.length}</Text></View>
+        </View>
+
         {/* Create Request card */}
         <View style={styles.card}> 
           <View style={styles.cardRow}>
@@ -124,6 +153,33 @@ export default function RequestScreen() {
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.error }]} onPress={handleEmergencyRequest}>
             <Text style={styles.primaryBtnText}>Emergency Request</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Active Requests List */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Active Requests</Text>
+          {active.length === 0 && <Text style={styles.emptyText}>No active requests.</Text>}
+          {active.map(r => (
+            <View key={r._id} style={styles.listItem}>
+              <Text style={styles.listItemTitle}>{r.patientName || r.bloodType}</Text>
+              <Text style={styles.listItemSub}>{r.status}</Text>
+              <TouchableOpacity onPress={() => router.push(`/requestStatus?id=${r._id}`)} style={styles.viewBtn}>
+                <Text style={styles.viewBtnTxt}>View</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+
+        {/* Past Requests List */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Past Requests</Text>
+          {past.length === 0 && <Text style={styles.emptyText}>No past requests.</Text>}
+          {past.map(r => (
+            <View key={r._id} style={styles.listItem}>
+              <Text style={styles.listItemTitle}>{r.patientName || r.bloodType}</Text>
+              <Text style={styles.listItemSub}>{r.status}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Guidelines */}
@@ -212,6 +268,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
+  dashboardCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  dashboardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  dashboardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  dashboardLabel: { color: colors.textSecondary },
+  dashboardValue: { fontWeight: '700', color: colors.text },
   emergencyCard: {
     backgroundColor: '#FFF5F5',
   },
@@ -258,6 +327,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 12,
   },
+  emptyText: { color: colors.textSecondary, fontSize: 13 },
+  listItem: { borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10 },
+  listItemTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  listItemSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  viewBtn: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: colors.secondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  viewBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   bullet: {
     width: 8,

@@ -1,4 +1,5 @@
-import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { moderateScale, responsiveFont, layout } from '../constants/theme';
 
 export const colors = {
   primary: '#E74C3C',      // Red for blood donation theme
@@ -66,30 +67,30 @@ export const commonStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    maxWidth: 800,
+    maxWidth: layout.maxContentWidth,
     width: '100%',
-    paddingHorizontal: 20,
+    paddingHorizontal: moderateScale(20),
   },
   title: {
-    fontSize: 28,
+    fontSize: responsiveFont(28),
     fontWeight: '700',
     textAlign: 'center',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: moderateScale(16),
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: responsiveFont(18),
     fontWeight: '600',
     textAlign: 'center',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: moderateScale(12),
   },
   text: {
-    fontSize: 16,
+    fontSize: responsiveFont(16),
     fontWeight: '400',
     color: colors.textSecondary,
-    marginBottom: 8,
-    lineHeight: 24,
+    marginBottom: moderateScale(8),
+    lineHeight: responsiveFont(24),
     textAlign: 'center',
   },
   section: {
@@ -100,9 +101,9 @@ export const commonStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginVertical: 8,
+    borderRadius: moderateScale(16),
+    padding: moderateScale(20),
+    marginVertical: moderateScale(8),
     width: '100%',
     boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 4,
@@ -113,12 +114,12 @@ export const commonStyles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 16,
+    borderRadius: moderateScale(12),
+    paddingVertical: moderateScale(16),
+    paddingHorizontal: moderateScale(16),
+    fontSize: responsiveFont(16),
     color: colors.text,
-    marginVertical: 8,
+    marginVertical: moderateScale(8),
   },
   inputFocused: {
     borderColor: colors.primary,
