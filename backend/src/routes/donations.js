@@ -1,9 +1,10 @@
 import express from 'express';
-import { trackDonation } from '../controllers/donationController.js';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { trackDonation, getMyDonations } from '../controllers/donationController.js';
+import { authMiddleware, requireDonor } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', authMiddleware, trackDonation);
+router.post('/', authMiddleware, requireDonor, trackDonation);
+router.get('/mine', authMiddleware, requireDonor, getMyDonations);
 
 export default router;

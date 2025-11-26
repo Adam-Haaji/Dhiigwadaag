@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import api from "../service/api";
+import apiClient from "../service/api";
 
 export default function EditProfile() {
   const [formData, setFormData] = useState({
@@ -35,7 +35,7 @@ export default function EditProfile() {
     }
 
     try {
-      await api.updateMe({
+  await apiClient.updateMe({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,

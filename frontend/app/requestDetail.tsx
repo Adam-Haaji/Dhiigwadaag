@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
-import api from '../service/api';
+import { useLocalSearchParams, Stack } from 'expo-router';
+import apiClient from '../service/api';
 import { colors } from '@/styles/commonStyles';
-import useAuth from '@/hooks/useAuth';
+import useAuthHook from '@/hooks/useAuth';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -13,29 +13,29 @@ export default function RequestDetail() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { user } = useAuth();
+  const { user } = useAuthHook();
   const userId: string | undefined = (user as any)?._id || (user as any)?.id;
   const userEmail: string | undefined = (user as any)?.email?.toLowerCase?.();
   const isAdmin = String((user as any)?.role || '').toLowerCase() === 'admin';
-  const isDonor = String((user as any)?.role || '').toLowerCase() === 'donor';
+  // Removed unused isDonor variable.
   const ownerById = !!(data?.requesterId?._id && userId && data.requesterId._id === userId);
   const ownerByEmail = !!(data?.requester?.email && userEmail && String(data.requester.email).toLowerCase() === userEmail);
   const isOwnerOrAdmin = !!(user && (isAdmin || ownerById || ownerByEmail));
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-      const doc = await api.getRequest(id);
+  const doc = await apiClient.getRequest(id);
       setData(doc);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load request');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load request');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const getRequesterPhone = (): string | undefined => {
     return data?.requester?.phone || data?.requesterId?.phone;
@@ -46,10 +46,10 @@ export default function RequestDetail() {
     if (!userId) { Alert.alert('Login required', 'Please log in before responding.'); return; }
     try {
       setSubmitting(true);
-      await api.respondToRequest(id, { donorId: userId, method });
+  await apiClient.respondToRequest(id, { donorId: userId, method });
       Alert.alert('Success', 'Your response has been recorded.');
       await load();
-    } catch (e: any) {
+    } catch {
       Alert.alert('Error', 'Could not record response.');
     } finally {
       setSubmitting(false);
@@ -84,11 +84,11 @@ export default function RequestDetail() {
       setSubmitting(true);
       // Preferred: use fulfill endpoint; fallback to respond 'donate' if forbidden
       try {
-        const res = await api.fulfillRequest(id);
+  const res = await apiClient.fulfillRequest(id);
         if (!res?.success) throw new Error('fulfill_failed');
-      } catch (e: any) {
+  } catch {
         // fallback
-        await api.respondToRequest(id, { donorId: userId!, method: 'donate' });
+  await apiClient.respondToRequest(id, { donorId: userId!, method: 'donate' });
       }
       Alert.alert('Success', 'Donation fulfilled successfully ✅');
       await load();
@@ -118,6 +118,9 @@ export default function RequestDetail() {
             <Text style={[s.statusText, { color: statusColor(data.status) }]}>Status: {data.status}</Text>
             <Text style={s.row}>Blood Type: <Text style={s.bold}>{data.bloodType}</Text></Text>
             <Text style={s.row}>Urgency: <Text style={s.bold}>{data.urgency}</Text></Text>
+            {typeof data.units !== 'undefined' && (
+              <Text style={s.row}>Units: <Text style={s.bold}>{String(data.units)}</Text></Text>
+            )}
             <Text style={s.row}>Location: <Text style={s.bold}>{data.location}</Text></Text>
             <Text style={s.row}>Status: <Text style={s.bold}>{data.status}</Text></Text>
           </View>
@@ -163,14 +166,14 @@ export default function RequestDetail() {
                 if (!id) return;
                 try {
                   setSubmitting(true);
-                  const res = await api.fulfillRequest(id);
+                  const res = await apiClient.fulfillRequest(id);
                   if (res?.success) {
                     Alert.alert('Success', 'Request marked as Fulfilled successfully.');
                     await load();
                   } else {
                     Alert.alert('Error', 'Could not update status.');
                   }
-                } catch (e) {
+                } catch {
                   Alert.alert('Error', 'Could not update status.');
                 } finally {
                   setSubmitting(false);
@@ -188,14 +191,14 @@ export default function RequestDetail() {
                 if (!id) return;
                 try {
                   setSubmitting(true);
-                  const res = await api.cancelRequest(id);
+                  const res = await apiClient.cancelRequest(id);
                   if (res?.success) {
                     Alert.alert('Success', 'This blood request has been cancelled.');
                     await load();
                   } else {
                     Alert.alert('Error', 'Could not cancel request.');
                   }
-                } catch (e) {
+                } catch {
                   Alert.alert('Error', 'Could not cancel request.');
                 } finally {
                   setSubmitting(false);

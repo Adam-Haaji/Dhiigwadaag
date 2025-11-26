@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import api from '../../service/api';
+import apiClient from '../../service/api';
 import { colors } from '@/styles/commonStyles';
-import useAuth from '@/hooks/useAuth';
+import useAuthHook from '@/hooks/useAuth';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -13,7 +13,7 @@ export default function RequestDetail() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { user } = useAuth();
+  const { user } = useAuthHook();
   const userId: string | undefined = (user as any)?._id || (user as any)?.id;
   const userEmail: string | undefined = (user as any)?.email?.toLowerCase?.();
   const isAdmin = String((user as any)?.role || '').toLowerCase() === 'admin';
@@ -25,7 +25,7 @@ export default function RequestDetail() {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-      const doc = await api.getRequest(id);
+  const doc = await apiClient.getRequest(id);
       setData(doc);
     } catch (e: any) {
       setError(e?.message || 'Failed to load request');
@@ -45,7 +45,7 @@ export default function RequestDetail() {
     if (!userId) { Alert.alert('Login required', 'Please log in before responding.'); return; }
     try {
       setSubmitting(true);
-      await api.respondToRequest(id, { donorId: userId, method });
+  await apiClient.respondToRequest(id, { donorId: userId, method });
       Alert.alert('Success', 'Your response has been recorded.');
       // Refresh local data
       load();
@@ -130,7 +130,7 @@ export default function RequestDetail() {
                 if (!id) return;
                 try {
                   setSubmitting(true);
-                  const res = await api.fulfillRequest(id);
+                  const res = await apiClient.fulfillRequest(id);
                   if (res?.success) {
                     Alert.alert('Success', 'Request marked as Fulfilled successfully.');
                     await load();

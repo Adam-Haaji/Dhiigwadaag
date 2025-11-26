@@ -4,15 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import api from "../service/api";
-import SelectField from '../components/SelectField';
+import apiClient from "../service/api";
+import useAuth from "@/hooks/useAuth";
+import SelectFieldComponent from '../components/SelectField';
 
 export default function BloodRequest() {
+  const { user, setUser } = useAuth();
   const [focusedField, setFocusedField] = useState('');
   const [form, setForm] = useState({
     patientName: '',
     bloodGroup: '' as '' | 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-',
     district: '' as '' | 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadaag'|'Howlwadag'|'Kaaran'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Wadajir (Medina)'|'Waberi'|'Wartanabada'|'Wardhiigley (Warta Nabadda)'|'Yaqshid'|'Garasbaley'|'Kahda',
+    units: '',
     contactPerson: '',
     contactPhone: '',
     urgentLevel: '' as '' | 'low'|'medium'|'high'|'critical',
@@ -44,6 +47,11 @@ export default function BloodRequest() {
       Alert.alert('Missing fields', 'Please fill in all required fields.');
       return false;
     }
+    const u = Number(form.units);
+    if (!Number.isFinite(u) || u < 1) {
+      Alert.alert('Units required', 'Please enter units needed (minimum 1).');
+      return false;
+    }
     if (!/^[0-9+\-()\s]{6,20}$/.test(form.contactPhone.trim())) {
       Alert.alert('Invalid phone', 'Please enter a valid contact phone number.');
       return false;
@@ -54,16 +62,20 @@ export default function BloodRequest() {
   const submit = async () => {
     if (!validate()) return;
     try {
-      await api.createBloodRequest({
+      const resp: any = await apiClient.createBloodRequest({
         patientName: form.patientName.trim(),
         bloodGroup: form.bloodGroup as any,
         district: form.district as any,
+        units: Number(form.units),
         contactPerson: form.contactPerson.trim(),
         contactPhone: form.contactPhone.trim(),
         urgentLevel: form.urgentLevel as any,
         reason: form.reason.trim(),
         additionalNote: form.additionalNote ? form.additionalNote.trim() : undefined,
       });
+      if (resp?.user) {
+        await setUser({ ...(user || {}), user: resp.user });
+      }
       notifySuccess('Blood request submitted');
       router.replace('/(home)');
     } catch (e: any) {
@@ -96,7 +108,7 @@ export default function BloodRequest() {
         </View>
 
         <View style={styles.section}>
-          <SelectField
+          <SelectFieldComponent
             label="Blood Group"
             required
             placeholder="Select Blood Group"
@@ -107,7 +119,21 @@ export default function BloodRequest() {
         </View>
 
         <View style={styles.section}>
-          <SelectField
+          <Text style={styles.label}>Units Needed *</Text>
+          <TextInput
+            style={[commonStyles.input, focusedField==='units' && commonStyles.inputFocused]}
+            placeholder="Number of units (bags)"
+            placeholderTextColor={colors.textSecondary}
+            value={form.units}
+            onChangeText={(v) => update('units', v.replace(/[^\d]/g, ''))}
+            onFocus={() => setFocusedField('units')}
+            onBlur={() => setFocusedField('')}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <SelectFieldComponent
             label="District"
             required
             placeholder="Select District"

@@ -4,7 +4,7 @@
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform, Alert } from 'react-native';
-import api from './api';
+import apiClient from './api';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 const isExpoGoAndroid = isExpoGo && Platform.OS === 'android';
@@ -100,21 +100,21 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     try {
       const resp = await Notifications.getExpoPushTokenAsync({ projectId });
       token = resp?.data ?? null;
-    } catch (e: any) {
-      console.log('getExpoPushTokenAsync failed:', e?.message);
+    } catch {
+      console.log('getExpoPushTokenAsync failed');
       token = null;
     }
     if (!token) return null;
 
     // Send to backend
     try {
-      await api.registerPushToken(token);
-    } catch (e) {
+      await apiClient.registerPushToken(token);
+    } catch {
       console.log('registerPushToken failed');
     }
 
     return token;
-  } catch (e) {
+  } catch {
     console.log('registerForPushNotificationsAsync error');
     return null;
   }

@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import Donor from '../models/Donor.js';
+import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { addDays, isPast } from '../utils/dateUtils.js';
 
@@ -27,6 +28,18 @@ export function startDonorReactivationCron() {
           { _id: { $in: toUpdate } },
           { $set: { isActive: true, availabilityStatus: 'available', nextAvailableDate: null, matchedRequest: null } }
         );
+        // Reactivate linked Users
+        try {
+          const userIds = donors.filter(d => d.user).map(d => d.user);
+          if (userIds.length) {
+            await User.updateMany(
+              { _id: { $in: userIds }, donorStatus: 'unavailable' },
+              { $set: { donorStatus: 'available', unavailableUntil: null } }
+            );
+          }
+        } catch (userErr) {
+          console.error('[cron] Reactivate users error:', userErr?.message || userErr);
+        }
         // Notify donors that they are available again
         try {
           const notes = donors

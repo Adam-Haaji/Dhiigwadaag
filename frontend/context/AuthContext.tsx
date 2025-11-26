@@ -1,20 +1,14 @@
 import React, { createContext, useState, useEffect } from "react";
-import api from "../service/api";
+import apiClient from "../service/api";
 import { registerForPushNotificationsAsync } from "../service/notificationService";
+import AsyncStorageLib from '@react-native-async-storage/async-storage';
 
-// Use AsyncStorage if available, fallback to memory so web/dev works
-let Storage: { getItem: (k: string) => Promise<string | null>; setItem: (k: string, v: string) => Promise<void>; removeItem: (k: string) => Promise<void>; };
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Storage = require('@react-native-async-storage/async-storage').default;
-} catch {
-  const store = new Map<string, string>();
-  Storage = {
-    async getItem(key: string) { return store.get(key) ?? null; },
-    async setItem(key: string, value: string) { store.set(key, value); },
-    async removeItem(key: string) { store.delete(key); },
-  };
-}
+// Simplified storage initialization (library is available in native & web via Expo). Fallback kept for resilience.
+let Storage: { getItem: (k: string) => Promise<string | null>; setItem: (k: string, v: string) => Promise<void>; removeItem: (k: string) => Promise<void>; } = AsyncStorageLib ?? {
+  async getItem() { return null; },
+  async setItem() {},
+  async removeItem() {},
+};
 
 export const AuthContext = createContext<any>(null);
 
@@ -39,7 +33,7 @@ export const AuthProvider: React.FC<any> = ({ children }) => {
   const logout = async () => {
     setUserState(null);
     await Storage.removeItem("@user");
-    await api.clearToken();
+  await apiClient.clearToken();
   };
 
   return <AuthContext.Provider value={{ user, setUser, login, logout }}>{children}</AuthContext.Provider>;

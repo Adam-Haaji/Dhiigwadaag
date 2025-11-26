@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Platform, ToastAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import api from '../service/api';
-import useAuth from '@/hooks/useAuth';
+import apiClient from '../service/api';
 import { colors } from '@/styles/commonStyles';
 
 export default function RequestStatus() {
@@ -14,20 +13,19 @@ export default function RequestStatus() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isMatched, setIsMatched] = useState<boolean>(false);
-  const { user } = useAuth();
-  const userId: string | undefined = (user as any)?._id || (user as any)?.id;
-  const isDonor = String((user as any)?.role || '').toLowerCase() === 'donor';
+  // Auth context currently unused in this view; removed to satisfy lint.
+  // Removed unused userId and isDonor to satisfy lint warnings; matching handled by backend response.
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-      const doc = await api.getBloodRequest(id);
+  const doc = await apiClient.getBloodRequest(id);
       setData(doc);
       // Ask backend if current user is the matched donor for this request
       if (String(doc?.status || '').toLowerCase() === 'matched') {
         try {
-          const resp: any = await api.isMatchedDonor(id);
+          const resp: any = await apiClient.isMatchedDonor(id);
           setIsMatched(!!resp?.isMatched);
         } catch {
           setIsMatched(false);
@@ -35,14 +33,14 @@ export default function RequestStatus() {
       } else {
         setIsMatched(false);
       }
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const notify = (msg: string) => {
     if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
@@ -53,7 +51,7 @@ export default function RequestStatus() {
     if (!id) return;
     try {
       setSubmitting(true);
-      await api.donorConfirmDonation(id);
+  await apiClient.donorConfirmDonation(id);
       notify('Donation fulfilled successfully ✅');
       await load();
     } catch (e: any) {

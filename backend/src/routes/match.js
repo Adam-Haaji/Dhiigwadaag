@@ -5,6 +5,7 @@ import Request from '../models/Request.js';
 import BloodRequest from '../models/BloodRequest.js';
 import Notification from '../models/Notification.js';
 import { yearsBetween, addDays } from '../utils/dateUtils.js';
+import { getPriorityTiers, tierLabel } from '../utils/bloodPriority.js';
 import { notifyDonorEmergency } from '../services/notificationDelivery.js';
 
 const router = express.Router();
@@ -75,63 +76,73 @@ router.post('/request', authMiddleware, async (req, res) => {
     const coords = { lat: body.lat ?? body.latitude, lng: body.lng ?? body.longitude };
     if (!bloodType) return res.status(400).json({ success: false, message: 'bloodType/bloodGroup is required' });
 
-    // Step 1-2: Filter donors (prefer geospatial $near when coords are available)
-    let donors = [];
+    // Priority tiers search sequence
+    const tiers = getPriorityTiers(bloodType);
     const hasCoords = Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng);
-    if (hasCoords) {
-      try {
-        const meters = (RADIUS_KM || 30) * 1000;
-        donors = await Donor.find({
-          bloodGroup: bloodType,
-          availabilityStatus: 'available',
-          isActive: true,
-          location: {
-            $near: {
-              $geometry: { type: 'Point', coordinates: [coords.lng, coords.lat] },
-              $maxDistance: meters,
+    let chosenTierIndex = -1;
+    let top = [];
+    let searchedBloodGroups = [];
+
+    for (let i = 0; i < tiers.length; i++) {
+      const tierBloods = tiers[i];
+      searchedBloodGroups = tierBloods; // last attempted
+      // Query donors for ANY of the blood groups in this tier
+      let donors = [];
+      if (hasCoords) {
+        try {
+          const meters = (RADIUS_KM || 30) * 1000;
+          donors = await Donor.find({
+            bloodGroup: { $in: tierBloods },
+            availabilityStatus: 'available',
+            isActive: true,
+            location: {
+              $near: {
+                $geometry: { type: 'Point', coordinates: [coords.lng, coords.lat] },
+                $maxDistance: meters,
+              },
             },
-          },
-        })
-          .limit(100)
-          .populate('user');
-      } catch (e) {
-        // Fall back to non-indexed scan if $near not usable (no index or no location data)
-        donors = await Donor.find({ bloodGroup: bloodType }).populate('user');
+          }).limit(150).populate('user');
+        } catch (e) {
+          donors = await Donor.find({ bloodGroup: { $in: tierBloods } }).populate('user');
+        }
+      } else {
+        donors = await Donor.find({ bloodGroup: { $in: tierBloods } }).populate('user');
       }
-    } else {
-      donors = await Donor.find({ bloodGroup: bloodType }).populate('user');
+
+      const filtered = donors.filter((d) => {
+        const age = donorAge(d);
+        if (typeof age === 'number' && (age < 18 || age > 65)) return false;
+        const eligible = d.isActive !== undefined ? d.isActive : isEligibleByDonation(d);
+        if (!eligible || String(d.availabilityStatus) !== 'available') return false;
+        return withinProximity({ district, ...coords }, d);
+      });
+
+      if (!filtered.length) continue;
+
+      // rank by proximity
+      const rLat = coords?.lat; const rLng = coords?.lng;
+      const withDistance = filtered.map(d => {
+        const dLat = d?.coordinates?.lat; const dLng = d?.coordinates?.lng;
+        let dist = null;
+        if (Number.isFinite(rLat) && Number.isFinite(rLng) && Number.isFinite(dLat) && Number.isFinite(dLng)) {
+          dist = haversineKm({ lat: rLat, lng: rLng }, { lat: dLat, lng: dLng });
+        }
+        return { donor: d, distanceKm: dist };
+      });
+      const sorted = withDistance.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+      top = sorted.slice(0, Math.min(sorted.length, 3));
+      chosenTierIndex = i;
+      break; // stop at first non-empty tier
     }
-    const filtered = donors.filter((d) => {
-      const age = donorAge(d);
-      if (typeof age === 'number' && (age < 18 || age > 80)) return false;
-      const eligible = d.isActive !== undefined ? d.isActive : isEligibleByDonation(d);
-      if (!eligible || String(d.availabilityStatus) !== 'available') return false;
-      return withinProximity({ district, ...coords }, d);
-    });
-
-    // Compute distances for proximity prioritization
-    const rLat = coords?.lat; const rLng = coords?.lng;
-    const withDistance = filtered.map(d => {
-      const dLat = d?.coordinates?.lat; const dLng = d?.coordinates?.lng;
-      let dist = null;
-      if (Number.isFinite(rLat) && Number.isFinite(rLng) && Number.isFinite(dLat) && Number.isFinite(dLng)) {
-        dist = haversineKm({ lat: rLat, lng: rLng }, { lat: dLat, lng: dLng });
-      }
-      return { donor: d, distanceKm: dist };
-    });
-
-    // Step 3: Rank by proximity only (AI removed)
-    const sorted = withDistance.sort((a, b) => {
-      const da = (a.distanceKm ?? Number.POSITIVE_INFINITY);
-      const db = (b.distanceKm ?? Number.POSITIVE_INFINITY);
-      return da - db;
-    });
-
-  const top = sorted.slice(0, Math.min(sorted.length, 3));
 
     // Set request status to Matched and record matched donor if available
     if (reqDoc && reqDoc._id) {
-      await Request.findByIdAndUpdate(reqDoc._id, { $set: { status: 'Matched' } }).catch(() => {});
+      const meta = {};
+      if (chosenTierIndex >= 0) {
+        meta.matchedTier = tierLabel(chosenTierIndex);
+        meta.tierUsed = searchedBloodGroups;
+      }
+      await Request.findByIdAndUpdate(reqDoc._id, { $set: { status: 'Matched', ...meta } }).catch(() => {});
       if (sourceType === 'BloodRequest') {
         const updates = { status: top.length ? 'matched' : 'pending' };
         if (top.length > 0 && top[0]?.donor?._id) {
@@ -149,8 +160,9 @@ router.post('/request', authMiddleware, async (req, res) => {
     for (const item of top) {
       const d = item.donor;
       if (!d) continue;
+      const tlabel = chosenTierIndex >= 0 ? tierLabel(chosenTierIndex) : 'Match';
       const title = 'Urgent Blood Match';
-      const message = `Urgent: ${bloodType} blood needed near ${district || 'your area'}. You’re a match and eligible to donate!`;
+      const message = `You are matched (${tlabel}) for patient needing ${bloodType} near ${district || 'your area'}.`;
       // Save app notification
       if (d.user) {
         await Notification.create({
@@ -159,11 +171,11 @@ router.post('/request', authMiddleware, async (req, res) => {
           message,
           type: 'request',
           urgent: String(urgency).toLowerCase() !== 'normal',
-          meta: { requestId: reqDoc?._id, bloodType, location: district, score: scoreById.get(String(d._id)) ?? null, source: 'request' },
+          meta: { requestId: reqDoc?._id, bloodType, location: district, tier: chosenTierIndex + 1, source: 'request' },
         });
       }
       // Try push/SMS
-      await notifyDonorEmergency(d, { title, message, meta: { requestId: reqDoc?._id, bloodType, location: district, score: scoreById.get(String(d._id)) ?? null } }).catch(() => {});
+      await notifyDonorEmergency(d, { title, message, meta: { requestId: reqDoc?._id, bloodType, location: district, tier: chosenTierIndex + 1 } }).catch(() => {});
       notified.push(String(d._id));
     }
 
@@ -171,16 +183,12 @@ router.post('/request', authMiddleware, async (req, res) => {
     const patientName = body.patientName || reqDoc?.patientName || 'Patient';
     const contactPhone = body.contactPhone || reqDoc?.contactPhone || (reqDoc?.requester?.phone) || '';
     const matchedDonors = top.map(({ donor, distanceKm }) => {
-      const predicted = null; // AI score removed
       const dist = typeof distanceKm === 'number' && Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(1)) : null;
-      const noteMsg = `Urgent blood request for patient ${patientName}. Blood type: ${bloodType}. Contact: ${contactPhone || 'N/A'}. Distance: ${dist ?? 'N/A'} km. Likelihood to respond: ${predicted}%. Please respond if available.`;
       return {
         donor_id: String(donor._id),
         donor_name: donor.fullName,
         blood_type: donor.bloodGroup,
         distance_km: dist,
-        predicted_response: predicted,
-        notification_message: noteMsg,
       };
     });
 
@@ -192,11 +200,14 @@ router.post('/request', authMiddleware, async (req, res) => {
       distance_km: typeof distanceKm === 'number' && Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(1)) : null,
     }));
 
-    const request_status = matchedDonors.length > 0 ? 'Request fulfilled' : 'Request pending — no donors found';
-    const messageOut = matchedDonors.length > 0 ? 'Matching completed successfully. Donors have been notified.' : 'No donors matched the criteria.';
+    const request_status = matchedDonors.length > 0 ? 'Matched tier found' : 'No donors found';
+    const messageOut = matchedDonors.length > 0 ? 'Matching completed successfully. Donors have been notified.' : 'No donors matched the priority tiers.';
 
     return res.json({
       request_status,
+      matchedTier: chosenTierIndex >= 0 ? tierLabel(chosenTierIndex) : null,
+      tierUsed: searchedBloodGroups,
+      patientBloodType: bloodType,
       matched_donors: matchedDonors,
       nearby_candidates,
       message: messageOut,

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
-import api, { Donor, getBaseUrl } from '../../service/api';
+import api, { Donor } from '../../service/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '@/styles/commonStyles';
 
@@ -71,9 +71,7 @@ export default function SearchDonor() {
       </View>
 
       {error && <Text style={s.error}>{error}</Text>}
-      {__DEV__ && (
-        <Text style={s.devTip}>API: {getBaseUrl()}</Text>
-      )}
+      {/* Removed API base URL display for security (was shown in devTip) */}
       <FlatList
         data={results}
         keyExtractor={(item) => item._id}
@@ -119,7 +117,7 @@ const s = StyleSheet.create({
   mapPreview: { height: 120, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, marginBottom: 12 },
   mapText: { color: colors.textSecondary },
   error: { color: '#E74C3C', marginBottom: 8 },
-  devTip: { color: colors.textSecondary, fontSize: 12, marginBottom: 8 },
+  // devTip removed: no longer exposing internal API details
   cardRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   card: { backgroundColor: colors.card, borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
   name: { fontSize: 16, fontWeight: '700', color: colors.text },

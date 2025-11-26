@@ -1,6 +1,16 @@
 import User from '../models/User.js';
 import Donor from '../models/Donor.js';
+import DonorEligibilityLog from '../models/DonorEligibilityLog.js';
 import { yearsBetween } from '../utils/dateUtils.js';
+import { evaluateEligibility } from '../utils/eligibility.js';
+
+function computeMenus(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'both' || r === 'admin') return ['home', 'donor', 'request', 'notification', 'profile'];
+  if (r === 'donor') return ['home', 'donor', 'notification', 'profile'];
+  if (r === 'requester') return ['home', 'request', 'notification', 'profile'];
+  return ['home'];
+}
 
 // POST /api/donors
 // Create a donor profile linked to the current user WITHOUT changing the User profile
@@ -38,12 +48,24 @@ export const createDonor = async (req, res) => {
         weightKg === undefined || consentGiven === undefined || !emergencyContact || !lastDonationDate || !availabilityStatus) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    if (typeof weightKg === 'number' && weightKg < 50) {
-      return res.status(400).json({ error: 'Weight must be at least 50kg' });
-    }
-    // Age validation
+    // Derived age
     const age = yearsBetween(dateOfBirth);
-    if (age < 18 || age > 80) return res.status(400).json({ error: 'Age must be between 18 and 80' });
+    // Run eligibility (createDonor path: user already passed client validation; we enforce again server-side)
+    const elig = evaluateEligibility({ age, weightKg, gender, hb: req.body?.hb, lastDonationDate: null });
+    if (!elig.eligible) {
+      // Log + mark user ineligible (do not escalate donor role per spec)
+      user.donorStatus = 'ineligible';
+      user.ineligibilityReason = elig.reason;
+      if (String(user.role) === 'requester') user.role = 'both'; else user.role = 'none';
+      await user.save().catch(()=>{});
+      await DonorEligibilityLog.create({
+        user: user._id,
+        decision: 'ineligible',
+        reason: elig.reason,
+        checkResults: { age, weightKg, gender, hb: req.body?.hb, cooldown: { withinCooldown: false } },
+      }).catch(()=>{});
+      return res.status(400).json({ success: false, reason: elig.reason, donor: null });
+    }
     // Phone format and uniqueness across Users and Donors
     if (!/^[0-9+\-()\s]{6,20}$/.test(String(phone))) return res.status(400).json({ error: 'Invalid phone format' });
     const [uPhone, dPhone] = await Promise.all([
@@ -71,17 +93,121 @@ export const createDonor = async (req, res) => {
 
     // Upgrade linked user role to 'Donor' so future logins are recognized as donor
     try {
-      if (String(user.role || '').toLowerCase() !== 'donor') {
-        user.role = 'Donor';
-        await user.save();
-      }
+      const current = String(user.role || '').toLowerCase();
+      let nextRole = 'donor';
+      if (current === 'requester' || current === 'both') nextRole = 'both';
+      user.role = nextRole;
+      user.donorStatus = 'available';
+      user.lastDonationDate = null;
+      user.ineligibilityReason = null;
+      user.age = age;
+      user.weightKg = weightKg;
+      user.gender = gender;
+      if (req.body?.hb !== undefined) user.hb = req.body.hb;
+      await user.save();
+      await DonorEligibilityLog.create({
+        user: user._id,
+        donor: donor?._id,
+        decision: 'eligible',
+        reason: null,
+        checkResults: { age, weightKg, gender, hb: req.body?.hb, cooldown: { withinCooldown: false } },
+      }).catch(()=>{});
     } catch (e) {
-      // Non-fatal: donor profile created even if role update fails
-      console.error('Failed to update user role to Donor:', e?.message || e);
+      console.error('Failed to update user role to donor/both:', e?.message || e);
     }
-    return res.status(201).json({ donor, roleUpdated: String(user.role).toLowerCase() === 'donor' });
+
+    const summary = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      donorStatus: user.donorStatus,
+      unavailableUntil: user.unavailableUntil,
+      menus: computeMenus(user.role),
+    };
+    return res.status(201).json({ donor, user: summary });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+};
+
+// POST /api/donors/register (lightweight eligibility pathway)
+// Body: { age, weightKg, gender, hb, bloodType, location }
+export const registerDonor = async (req, res) => {
+  try {
+    const userId = req?.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const { age, weightKg, gender, hb, bloodType, location } = req.body || {};
+    if ([age, weightKg, gender, hb, bloodType, location].some(v => v === undefined || v === null || String(v).trim() === '')) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    const ageNum = Number(age);
+    const weightNum = Number(weightKg);
+    const hbNum = Number(hb);
+    const lastDonationDate = user.lastDonationDate;
+    const elig = evaluateEligibility({ age: ageNum, weightKg: weightNum, gender, hb: hbNum, lastDonationDate });
+
+    if (!elig.eligible) {
+      user.donorStatus = 'ineligible';
+      user.ineligibilityReason = elig.reason;
+      // Role transition per spec
+      user.role = (user.role === 'requester') ? 'both' : 'none';
+      user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
+      if (bloodType) user.bloodType = bloodType;
+      if (location) user.location = location;
+      await user.save();
+      await DonorEligibilityLog.create({
+        user: user._id,
+        decision: 'ineligible',
+        reason: elig.reason,
+        checkResults: {
+          age: ageNum,
+          weightKg: weightNum,
+          gender,
+          hb: hbNum,
+          cooldown: { lastDonationDate, nextEligibleDate: elig.nextEligibleDate, withinCooldown: elig.code === 'cooldown' },
+        },
+      }).catch(()=>{});
+      return res.status(400).json({ success: false, reason: elig.reason, donor: null });
+    }
+
+    // Eligible path
+    user.donorStatus = 'available';
+    user.ineligibilityReason = null;
+    user.role = (user.role === 'requester') ? 'both' : 'donor';
+    user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
+    if (bloodType) user.bloodType = bloodType;
+    if (location) user.location = location;
+    await user.save();
+    await DonorEligibilityLog.create({
+      user: user._id,
+      decision: 'eligible',
+      reason: null,
+      checkResults: {
+        age: ageNum,
+        weightKg: weightNum,
+        gender,
+        hb: hbNum,
+        cooldown: { lastDonationDate, nextEligibleDate: null, withinCooldown: false },
+      },
+    }).catch(()=>{});
+    const summary = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      donorStatus: user.donorStatus,
+      unavailableUntil: user.unavailableUntil,
+      ineligibilityReason: user.ineligibilityReason,
+      menus: computeMenus(user.role),
+    };
+    return res.json({ success: true, message: 'You are eligible to donate', user: summary });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 

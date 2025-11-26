@@ -1,10 +1,85 @@
-import React from "react";
-import { TextInput, StyleSheet } from "react-native";
+import React, { useState } from 'react';
+import { TextInput, StyleSheet, View, Text } from 'react-native';
+import { semanticColors, radii, spacing } from '../constants/colors';
+import { moderateScale, responsiveFont } from '../constants/theme';
+import { fontFamilies } from '../constants/fonts';
 
-export default function Input(props: any) {
-  return <TextInput style={styles.input} {...props} />;
+interface InputProps {
+  label?: string;
+  error?: string;
+  helperText?: string;
+  multiline?: boolean;
+  [key: string]: any;
+}
+
+export default function Input({ label, error, helperText, style, multiline = false, ...rest }: InputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={styles.wrapper}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <TextInput
+        style={[
+          styles.input,
+          multiline && { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.sm },
+          focused && styles.inputFocused,
+          error && styles.inputError,
+          style,
+        ]}
+        placeholderTextColor={semanticColors.textMuted}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        multiline={multiline}
+        {...rest}
+      />
+      {(helperText || error) && (
+        <Text style={[styles.helper, error && styles.helperError]}>
+          {error ? error : helperText}
+        </Text>
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  input: { borderWidth: 1, borderColor: "#ddd", padding: 10, borderRadius: 8 },
+  wrapper: {
+    marginBottom: moderateScale(spacing.md),
+  },
+  label: {
+    fontFamily: fontFamilies.medium,
+    fontSize: responsiveFont(13),
+    color: semanticColors.textSecondary,
+    marginBottom: moderateScale(spacing.xs),
+    letterSpacing: 0.2,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
+    backgroundColor: semanticColors.bgSurface,
+    paddingHorizontal: moderateScale(spacing.md),
+    paddingVertical: moderateScale(spacing.sm),
+    borderRadius: radii.md,
+    fontFamily: fontFamilies.regular,
+    fontSize: responsiveFont(15),
+    color: semanticColors.textPrimary,
+  },
+  inputFocused: {
+    borderColor: semanticColors.interactivePrimary,
+    shadowColor: semanticColors.interactivePrimary,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  inputError: {
+    borderColor: semanticColors.interactiveDanger,
+  },
+  helper: {
+    marginTop: moderateScale(spacing.xs),
+    fontSize: responsiveFont(12),
+    color: semanticColors.textMuted,
+    fontFamily: fontFamilies.regular,
+  },
+  helperError: {
+    color: semanticColors.interactiveDanger,
+    fontFamily: fontFamilies.medium,
+  },
 });

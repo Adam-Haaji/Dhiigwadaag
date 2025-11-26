@@ -4,23 +4,25 @@ import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import colors from "../constants/colors";
-import api from "../service/api";
-import useAuth from "../hooks/useAuth";
+import apiClient from "../service/api";
+import useAuthHook from "../hooks/useAuth";
 
 const Login = () => {
   const router = useRouter();
   const { control, handleSubmit, formState: { errors, isValid, isSubmitting } } = useForm({ mode: 'onChange', defaultValues: { email: '', password: '' } });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setUser } = useAuth();
+  const { setUser } = useAuthHook();
 
   const onSubmit = async ({ email, password }: any) => {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.login({ email, password });
+      const res = await apiClient.login({ email, password });
       await setUser({ token: res.token, user: res.user });
-      router.replace('/(home)');
+      const role = String(res?.user?.role || '').toLowerCase();
+      if (role === 'none') router.replace('/role');
+      else router.replace('/(home)');
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {

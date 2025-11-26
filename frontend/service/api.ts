@@ -7,7 +7,7 @@ type Json = Record<string, any> | undefined;
 // AsyncStorage fallback for web/test
 let AsyncStorage: { getItem: (k: string) => Promise<string | null>; setItem: (k: string, v: string) => Promise<void>; removeItem: (k: string) => Promise<void>; };
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   AsyncStorage = require('@react-native-async-storage/async-storage').default;
 } catch {
   const mem = new Map<string, string>();
@@ -87,14 +87,21 @@ async function request(method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path: string
     return ct.includes('application/json') ? res.json() : res.text();
   } catch (e: any) {
     if (e?.name === 'AbortError') {
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms. Check API at ${BASE_URL}. You can disable the timeout by setting EXPO_PUBLIC_API_TIMEOUT_MS=0 when starting Expo.`);
+      if (__DEV__) {
+        // Log detailed info for developers only; do not expose URLs to end users
+        console.warn('[API] Timeout', { baseUrl: BASE_URL, timeoutMs: REQUEST_TIMEOUT_MS });
+      }
+      throw new Error('Request timed out. Please try again.');
     }
     const msg = (e?.message || '').toLowerCase();
     if (msg.includes('network request failed') || msg.includes('failed to fetch')) {
-      const platformTip = Platform.OS === 'android'
-        ? `On Android emulator use http://10.0.2.2:5000. On a real device, set EXPO_PUBLIC_API_BASE_URL to your PC LAN IP, e.g., http://192.168.x.x:5000`
-        : `On iOS simulator, http://localhost:5000 works only if the backend runs on the same Mac. On a real iPhone, set EXPO_PUBLIC_API_BASE_URL to your PC LAN IP, e.g., http://192.168.x.x:5000`;
-      throw new Error(`Network request failed. Backend not reachable at ${BASE_URL}. ${platformTip}`);
+      if (__DEV__) {
+        const platformTip = Platform.OS === 'android'
+          ? 'Android emulator: use 10.0.2.2:5000; real device: set EXPO_PUBLIC_API_BASE_URL to your LAN IP'
+          : 'iOS simulator: localhost works only on same Mac; real iPhone: set EXPO_PUBLIC_API_BASE_URL to your LAN IP';
+        console.warn('[API] Network unreachable', { baseUrl: BASE_URL, tip: platformTip });
+      }
+      throw new Error('Network error. Please check your connection.');
     }
     throw e;
   } finally {
@@ -119,6 +126,8 @@ export const api = {
   // donors
   // Legacy (User-profile-based) register; kept for backward compatibility in case older screens use it.
   registerDonor: (data: { name?: string; phone?: string; bloodType?: string; location?: string; availability?: boolean; }) => request('POST', '/api/donors', data),
+  // New lightweight eligibility registration
+  registerDonorEligibility: (data: { age: number; weightKg: number; gender: 'male'|'female'; hb: number; bloodType: string; location: string; }) => request('POST', '/api/donors/register', data),
   // New Donor profile creation (separate Donor schema)
   createDonor: (data: {
     fullName: string;
@@ -133,13 +142,14 @@ export const api = {
     emergencyContact: { name: string; relationship: string; phone: string };
     lastDonationDate: string; // ISO string
     availabilityStatus: 'available' | 'unavailable';
-    donations?: Array<{ donationDate: string; volumeMl: number; screeningClear: boolean }>;
+    donations?: { donationDate: string; volumeMl: number; screeningClear: boolean }[];
   }) => request('POST', '/api/donors', data),
   // Blood Requests
   createBloodRequest: (data: {
     patientName: string;
     bloodGroup: 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-';
     district: 'Abdiaziz'|'Bondhere'|'Daynile'|'Dharkenley'|'Hamar Jajab'|'Hamar Weyne'|'Hodan'|'Howlwadaag'|'Howlwadag'|'Kaaran'|'Karaan'|'Shangani'|'Shibis'|'Wadajir'|'Wadajir (Medina)'|'Waberi'|'Wartanabada'|'Wardhiigley (Warta Nabadda)'|'Yaqshid'|'Garasbaley'|'Kahda';
+    units: number;
     contactPerson: string;
     contactPhone: string;
     urgentLevel: 'low'|'medium'|'high'|'critical';
@@ -171,9 +181,12 @@ export const api = {
   donorsMeta: () => request('GET', '/api/donors/meta'),
   getDonorProfile: (id: string) => request('GET', `/api/donors/${encodeURIComponent(id)}`),
   // requests
-  createRequest: (data: { patientName: string; bloodType: string; location: string; urgency: 'Normal'|'Urgent'|'Critical'; }) => request('POST', '/api/requests', data),
+  createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Urgent'|'Critical'; }) => request('POST', '/api/requests', data),
   listRequests: () => request('GET', '/api/requests'),
+  listMyMatches: () => request('GET', '/api/requests/matches/me'),
   getRequest: (id: string) => request('GET', `/api/requests/${id}`),
+  acceptDonation: (id: string) => request('PATCH', `/api/requests/${id}/accept`),
+  confirmDonationComplete: (id: string) => request('PATCH', `/api/requests/${id}/complete`),
   respondToRequest: (id: string, data: { donorId: string; method: 'call'|'whatsapp'|'donate' }) => request('PUT', `/api/requests/${id}/respond`, data),
   markRequestFulfilled: (id: string) => request('PUT', `/api/requests/${id}/mark-fulfilled`),
   fulfillRequest: (id: string) => request('PUT', `/api/requests/${id}/fulfill`),
@@ -187,6 +200,8 @@ export const api = {
   registerPushToken: (token: string) => request('POST', '/api/notifications/register-token', { token }),
   // Smart matching route
   matchRequest: (data: { requestId?: string; bloodType?: string; bloodGroup?: string; district?: string; location?: string; urgency?: 'Normal'|'Urgent'|'Critical'|string; urgentLevel?: string; lat?: number; lng?: number; }) => request('POST', '/api/match/request', data),
+  // donations (history)
+  getMyDonations: () => request('GET', '/api/donations/mine'),
 };
 
 export type Donor = { _id: string; name: string; email: string; bloodType: string; location: string; phone: string; availability: boolean; avatarUrl?: string };

@@ -16,6 +16,8 @@ const bloodRequestSchema = new mongoose.Schema(
     patientName: { type: String, required: true, trim: true },
     bloodGroup: { type: String, enum: bloodGroups, required: true },
     district: { type: String, enum: districts, required: true },
+    // Units of blood requested (bags)
+    units: { type: Number, min: 1, default: 1 },
     contactPerson: { type: String, required: true, trim: true },
     contactPhone: { type: String, required: true, trim: true },
     urgentLevel: { type: String, enum: urgentLevels, required: true },

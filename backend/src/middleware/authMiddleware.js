@@ -12,3 +12,25 @@ export const authMiddleware = (req, res, next) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+// Role guard utilities
+// Normalize role to lower-case for comparisons
+const roleOf = (req) => String(req?.user?.role || '').toLowerCase();
+
+export const requireDonor = (req, res, next) => {
+  const r = roleOf(req);
+  if (r === 'donor' || r === 'both' || r === 'admin') return next();
+  return res.status(403).json({ error: 'forbidden_donor_only' });
+};
+
+export const requireRequester = (req, res, next) => {
+  const r = roleOf(req);
+  if (r === 'requester' || r === 'both' || r === 'admin') return next();
+  return res.status(403).json({ error: 'forbidden_requester_only' });
+};
+
+export const blockNone = (req, res, next) => {
+  const r = roleOf(req);
+  if (r && r !== 'none') return next();
+  return res.status(403).json({ error: 'forbidden_role_none' });
+};
