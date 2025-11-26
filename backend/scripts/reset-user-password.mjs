@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import bcrypt from "bcryptjs";
+
 
 function parseArgs(argv){
   const out = { email: '', password: '' };
