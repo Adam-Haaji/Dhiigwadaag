@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, StatusBar, TextInput, Keyboar
 import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import colors from "../constants/colors";
+import colors, { semanticColors } from "../constants/colors";
 import apiClient from "../service/api";
 import useAuthHook from "../hooks/useAuth";
+import { useTheme } from '@/context/ThemeContext';
 
 const Login = () => {
   const router = useRouter();
@@ -31,9 +32,10 @@ const Login = () => {
   };
   
 
+  const { isDark } = useTheme();
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f7f8ff" />
+    <SafeAreaView style={[styles.container, { backgroundColor: semanticColors.bgAlt }] }>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={semanticColors.bgAlt} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
@@ -41,22 +43,22 @@ const Login = () => {
         <View style={styles.content}>
           {/* Header Section */}
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
+            <Text style={[styles.title, { color: semanticColors.textPrimary }]}>Welcome Back</Text>
+            <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Sign in to continue</Text>
           </View>
 
           {/* Card with form */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }]}>
             {/* Email/Phone Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Email</Text>
               <Controller control={control} name="email"
                 rules={{ required: true, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }}
                 render={({ field }: any) => (
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]}
                     placeholder="Email"
-                    placeholderTextColor="#9aa0a6"
+                    placeholderTextColor={semanticColors.textMuted}
                     value={field.value}
                     onChangeText={field.onChange}
                     autoCapitalize="none"
@@ -69,14 +71,14 @@ const Login = () => {
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Password</Text>
               <Controller control={control} name="password"
                 rules={{ required: true, minLength: 6 }}
                 render={({ field }: any) => (
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]}
                     placeholder="Password"
-                    placeholderTextColor="#9aa0a6"
+                    placeholderTextColor={semanticColors.textMuted}
                     value={field.value}
                     onChangeText={field.onChange}
                     secureTextEntry
@@ -92,7 +94,7 @@ const Login = () => {
               onPress={() => router.push('/forgotPassword')}
               accessibilityRole="button"
             >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* Login Button */}
@@ -106,7 +108,7 @@ const Login = () => {
 
             {/* Sign Up Section inside card */}
             <View style={styles.signupContainer}>
-              <Text style={styles.signupText}>Don&apos;t have an account? </Text>
+              <Text style={[styles.signupText, { color: semanticColors.textSecondary }]}>Don&apos;t have an account? </Text>
               <TouchableOpacity onPress={() => router.push('/signup')} accessibilityRole="button">
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
@@ -121,7 +123,6 @@ const Login = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8ff',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -140,17 +141,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#111',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
     textAlign: 'center',
   },
   card: {
-    backgroundColor: '#fff',
     marginHorizontal: 24,
     paddingHorizontal: 20,
     paddingVertical: 24,
@@ -162,6 +160,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     // Android shadow
     elevation: 8,
+    borderWidth: 1,
   },
   inputContainer: {
     marginBottom: 20,
@@ -169,17 +168,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: '#fff',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -211,7 +207,6 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 16,
-    color: '#6b7280',
   },
   signupLink: {
     color: colors.primary,
