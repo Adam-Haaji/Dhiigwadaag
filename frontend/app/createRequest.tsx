@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import SelectField from '../components/SelectField';
+import { router } from 'expo-router';
+import api from '@/service/api';
+import useAuth from '@/hooks/useAuth';
 
 type FormState = {
   patientName: string;
@@ -61,6 +64,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
   onBack,
   onSubmitSuccess,
 }) => {
+  const { user, setUser } = useAuth();
   const [form, setForm] = useState<FormState>({
     patientName: '',
     bloodType: null,
@@ -93,14 +97,55 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setSubmitted(true);
     if (hasErrors) {
       Alert.alert('Check your input', 'Please fill in all required fields correctly.');
       return;
     }
-    onSubmitSuccess?.(form);
-    Alert.alert('Request Submitted', 'Your request has been submitted successfully.');
+    try {
+      // Ensure requester role before creating request
+      const role = String(user?.user?.role || '').toLowerCase();
+      if (role !== 'requester') {
+        try {
+          const updated = await api.switchRole('requester');
+          const token = user?.token;
+          await setUser({ token, user: updated });
+        } catch {}
+      }
+
+      // Create the request in backend
+      const payload = {
+        patientName: form.patientName.trim(),
+        bloodType: String(form.bloodType),
+        location: String(form.location),
+        units: Number(form.units),
+        urgency: (form.urgency || 'normal') as any,
+      };
+      try {
+        await api.createRequest(payload);
+      } catch (e1: any) {
+        const msg = e1?.message || '';
+        // If role guard blocked, try switching and retry once
+        if (msg.includes('forbidden_requester_only') || msg.includes('Forbidden') || msg.includes('403')) {
+          try {
+            const updated = await api.switchRole('requester');
+            const token = user?.token;
+            await setUser({ token, user: updated });
+            await api.createRequest(payload);
+          } catch (e2: any) {
+            throw e2;
+          }
+        } else {
+          throw e1;
+        }
+      }
+      onSubmitSuccess?.(form);
+      // Navigate to Search Donor with prefilled blood type + location
+      router.replace({ pathname: '/searchDonor', params: { bloodType: String(form.bloodType), city: String(form.location) } });
+    } catch (e: any) {
+      Alert.alert('Submit failed', e?.message || 'Could not create request.');
+    }
   };
 
   return (

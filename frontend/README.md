@@ -53,7 +53,12 @@ Remove-Item Env:HTTP_PROXY -ErrorAction SilentlyContinue; Remove-Item Env:HTTPS_
 
 ## API connectivity
 
-The app talks to the backend REST API. By default, it tries to auto-detect your LAN IP from Expo and use `http://<LAN_IP>:5000`. You can override this via environment variables when starting Expo:
+The app talks to the backend REST API. By default, it tries to use sensible defaults:
+
+- Android emulator: `http://10.0.2.2:5000`
+- iOS simulator or web: detected LAN IP if available, else `http://localhost:5000`
+
+You can override via environment variables when starting Expo:
 
 - EXPO_PUBLIC_API_BASE_URL: Full base URL for the backend, e.g. `http://192.168.1.20:5000`
 - EXPO_PUBLIC_API_TIMEOUT_MS: Request timeout in ms. Set `0` to disable timeouts during debugging.

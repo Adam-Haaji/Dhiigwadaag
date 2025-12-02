@@ -186,6 +186,18 @@ export default function DonorRegistration() {
     setSubmitting(true);
     setIneligibleReason(null);
     try {
+      // Ensure role is donor before calling donor-only endpoint
+      const currentRole = String(user?.user?.role || '').toLowerCase();
+      if (!(currentRole === 'donor' || currentRole === 'both' || currentRole === 'admin')) {
+        try {
+          const switched = await api.switchRole('donor');
+          if (switched) {
+            await setUser({ ...(user || {}), user: switched });
+          }
+        } catch (e) {
+          // If switch fails, fall through; server will respond with clearer error
+        }
+      }
       const resp: any = await api.registerDonorEligibility({
         age: Number(formData.age),
         weightKg: Number(formData.weightKg),
@@ -193,6 +205,9 @@ export default function DonorRegistration() {
         hb: Number(formData.hb),
         bloodType: formData.bloodGroup,
         location: formData.district,
+        lastDonationDate: formData.lastDonationDate ? toIso(formData.lastDonationDate) : undefined,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
       });
       if (resp?.success) {
         if (resp?.user) await setUser({ ...(user || {}), user: resp.user });
@@ -203,7 +218,17 @@ export default function DonorRegistration() {
         throw new Error(resp?.reason || 'Unknown response');
       }
     } catch (e: any) {
-      const msg = e?.message || 'Failed';
+      let msg = e?.message || 'Failed';
+      // Parse JSON error bodies thrown by API helper
+      if (msg && msg.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(msg);
+          msg = parsed?.reason || parsed?.error || msg;
+          if (parsed?.error === 'forbidden_donor_only') {
+            msg = 'Please switch to Donor role and try again.';
+          }
+        } catch {}
+      }
       setIneligibleReason(msg);
     } finally {
       setSubmitting(false);

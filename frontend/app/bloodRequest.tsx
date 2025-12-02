@@ -62,6 +62,15 @@ export default function BloodRequest() {
   const submit = async () => {
     if (!validate()) return;
     try {
+      // Ensure requester role before creating a requester-only resource
+      const role = String(user?.user?.role || '').toLowerCase();
+      if (role !== 'requester') {
+        try {
+          const updated = await apiClient.switchRole('requester');
+          const token = user?.token;
+          await setUser({ token, user: updated });
+        } catch {}
+      }
       const resp: any = await apiClient.createBloodRequest({
         patientName: form.patientName.trim(),
         bloodGroup: form.bloodGroup as any,
@@ -77,7 +86,7 @@ export default function BloodRequest() {
         await setUser({ ...(user || {}), user: resp.user });
       }
       notifySuccess('Blood request submitted');
-      router.replace('/(home)');
+      router.replace('/(home)/request');
     } catch (e: any) {
       Alert.alert('Submission failed', e?.message || 'Please try again');
     }

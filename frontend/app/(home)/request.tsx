@@ -9,7 +9,7 @@ import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 
 export default function RequestScreen() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const role = String(user?.user?.role || '').toLowerCase();
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
@@ -38,6 +38,14 @@ export default function RequestScreen() {
   };
 
   const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  const handleSwitchToDonor = async () => {
+    try {
+      const updated = await api.switchRole('donor');
+      const token = user?.token;
+      await setUser({ token, user: updated });
+      router.replace('/(home)/donor');
+    } catch {}
+  };
 
   const recentRequests = [
     {
@@ -115,6 +123,11 @@ export default function RequestScreen() {
             </View>
           </View>
         </View>
+
+        {/* Switch Role */}
+        <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchToDonor}>
+          <Text style={styles.switchBtnText}>Switch to Donor</Text>
+        </TouchableOpacity>
 
         {/* Dashboard Stats */}
         <View style={styles.dashboardCard}>
@@ -277,6 +290,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 16,
   },
+  switchBtn: {
+    alignSelf: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  switchBtnText: { color: '#fff', fontWeight: '700' },
   dashboardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
   dashboardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   dashboardLabel: { color: colors.textSecondary },

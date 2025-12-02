@@ -22,6 +22,8 @@ const Login = () => {
       await setUser({ token: res.token, user: res.user });
       const role = String(res?.user?.role || '').toLowerCase();
       if (role === 'none') router.replace('/role');
+      else if (role === 'donor') router.replace('/(home)/donor');
+      else if (role === 'requester') router.replace('/(home)/request');
       else router.replace('/(home)');
     } catch (e: any) {
       setError(e?.message || 'Login failed');

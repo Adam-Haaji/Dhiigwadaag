@@ -6,9 +6,12 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import api, { Donor } from "../service/api";
+import useAuth from '@/hooks/useAuth';
 import SelectField from '../components/SelectField';
 
 export default function EmergencyRequest() {
+  const { user, setUser } = useAuth();
+  const role = String(user?.user?.role || '').toLowerCase();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBloodType, setSelectedBloodType] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -165,6 +168,14 @@ export default function EmergencyRequest() {
         
         <TouchableOpacity style={styles.emergencyCallButton} onPress={async () => {
           try {
+            // Ensure requester role before calling requester-only endpoint
+            if (role !== 'requester') {
+              try {
+                const updated = await api.switchRole('requester');
+                const token = user?.token;
+                await setUser({ token, user: updated });
+              } catch {}
+            }
             if (!selectedBloodType && !selectedLocation) {
               // Still allow broadcast to all if nothing selected, but better to prompt
             }
@@ -172,7 +183,7 @@ export default function EmergencyRequest() {
             // Optionally navigate to notifications
             router.push('/(home)/notification');
           } catch (e: any) {
-            console.warn('Emergency failed', e?.message);
+            setError(e?.message || 'Emergency request failed');
           }
         }}>
           <IconSymbol name="phone.fill" size={20} color="#FFFFFF" />

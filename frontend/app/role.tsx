@@ -1,11 +1,30 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import api from '@/service/api';
+import useAuth from '@/hooks/useAuth';
 
 export default function RoleSelect() {
+  const { user, setUser } = useAuth();
+  const [loading, setLoading] = useState<'donor'|'requester'|null>(null);
+
+  const doSwitch = async (newRole: 'donor'|'requester') => {
+    if (loading) return;
+    setLoading(newRole);
+    try {
+      const updated = await api.switchRole(newRole);
+      const token = user?.token;
+      await setUser({ token, user: updated });
+      router.replace(newRole === 'donor' ? '/(home)/donor' : '/(home)/request');
+    } catch (e) {
+      // minimal UX; could add toast later
+    } finally {
+      setLoading(null);
+    }
+  };
   return (
     <SafeAreaView style={s.container}>
       <ScrollView contentContainerStyle={[s.scrollContent, Platform.OS !== 'ios' && s.scrollWithTab]} showsVerticalScrollIndicator={false}>
@@ -27,16 +46,16 @@ export default function RoleSelect() {
           </View>
         </View>
 
-        <Text style={s.sectionTitle}>How would you like to help?</Text>
+        <Text style={s.sectionTitle}>Choose your role to begin</Text>
         <View style={s.cardGrid}>
           <View style={s.card}>
             <Image source={require('../assets/image/onboarding1.png')} resizeMode="cover" style={s.cardImage} />
             <View style={s.cardIconWrap}><IconSymbol name="hand.thumbsup.fill" size={28} color="#fff" /></View>
-            <Text style={s.cardTitle}>Become a Donor</Text>
-            <Text style={s.cardText}>Register, check your eligibility, and start saving lives.</Text>
-            <TouchableOpacity style={[s.ctaBtn, s.donor]} onPress={() => router.push('/donorRegistration')}>
-              <IconSymbol name="person.badge.plus" size={18} color="#fff" />
-              <Text style={s.ctaTxt}>Start Donor Registration</Text>
+            <Text style={s.cardTitle}>Become Donor</Text>
+            <Text style={s.cardText}>Switch now. Registration appears inside Donor tab only if needed.</Text>
+            <TouchableOpacity style={[s.ctaBtn, s.donor]} onPress={() => doSwitch('donor')} disabled={!!loading}>
+              {loading === 'donor' ? <ActivityIndicator color="#fff" /> : <IconSymbol name="arrow.right.circle.fill" size={18} color="#fff" />}
+              <Text style={s.ctaTxt}>Switch to Donor</Text>
             </TouchableOpacity>
             <View style={s.chipsRow}>
               <View style={s.chip}><IconSymbol name="drop.fill" size={16} color="#fff" /><Text style={s.chipTxt}>A+/O-</Text></View>
@@ -48,11 +67,11 @@ export default function RoleSelect() {
           <View style={s.card}>
             <Image source={require('../assets/image/onboarding2.png')} resizeMode="cover" style={s.cardImage} />
             <View style={[s.cardIconWrap, { backgroundColor: colors.secondary }]}><IconSymbol name="bell.fill" size={28} color="#fff" /></View>
-            <Text style={s.cardTitle}>Request Blood</Text>
-            <Text style={s.cardText}>Create a request and alert matched donors nearby.</Text>
-            <TouchableOpacity style={[s.ctaBtn, s.request]} onPress={() => router.push('/bloodRequest')}>
-              <IconSymbol name="paperplane.fill" size={18} color="#fff" />
-              <Text style={s.ctaTxt}>Create Blood Request</Text>
+            <Text style={s.cardTitle}>Become Requester</Text>
+            <Text style={s.cardText}>Switch now. Request forms live inside the Request tab.</Text>
+            <TouchableOpacity style={[s.ctaBtn, s.request]} onPress={() => doSwitch('requester')} disabled={!!loading}>
+              {loading === 'requester' ? <ActivityIndicator color="#fff" /> : <IconSymbol name="arrow.right.circle.fill" size={18} color="#fff" />}
+              <Text style={s.ctaTxt}>Switch to Requester</Text>
             </TouchableOpacity>
             <View style={s.chipsRow}>
               <View style={[s.chip, { backgroundColor: colors.secondary }]}><IconSymbol name="location.fill" size={16} color="#fff" /><Text style={s.chipTxt}>Nearby help</Text></View>
@@ -66,7 +85,7 @@ export default function RoleSelect() {
           <Text style={sinfo.infoTitle}>Tips</Text>
           <View style={sinfo.row}><IconSymbol name="checkmark.seal.fill" size={18} color={colors.success} /><Text style={sinfo.infoText}>Donor eligibility: Age 18–65, weight ≥50kg, HB threshold</Text></View>
           <View style={sinfo.row}><IconSymbol name="lock.fill" size={18} color={colors.textSecondary} /><Text style={sinfo.infoText}>Your data is protected and used only for matching</Text></View>
-          <View style={sinfo.row}><IconSymbol name="sparkles" size={18} color={colors.accent} /><Text style={sinfo.infoText}>You can switch roles anytime from the Home tab</Text></View>
+          <View style={sinfo.row}><IconSymbol name="sparkles" size={18} color={colors.accent} /><Text style={sinfo.infoText}>You can switch roles anytime from the dashboards</Text></View>
         </View>
       </ScrollView>
     </SafeAreaView>

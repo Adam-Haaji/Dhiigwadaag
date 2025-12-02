@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import api from '../../service/api';
 import { useFocusEffect } from '@react-navigation/native';
+import useAuth from '@/hooks/useAuth';
 
 // Lazy-load LinearGradient to avoid type resolution issues in some setups
 let LinearGradient: any;
@@ -15,8 +16,7 @@ try {
   LinearGradient = View;
 }
 
-type ScopeTab = 'donors' | 'requests';
-type RequestFilter = 'all' | 'unread' | 'normal' | 'urgent' | 'critical';
+// Unified notifications screen: no per-scope tabs or filters
 
 // Shadows
 const shadow = Platform.select({
@@ -40,8 +40,8 @@ const cardShadow = Platform.select({
 });
 
 export default function NotificationScreen() {
-  const [scope, setScope] = useState<ScopeTab>('requests');
-  const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
+  const { user } = useAuth();
+  const role = String(user?.user?.role || '').toLowerCase();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,23 +52,29 @@ export default function NotificationScreen() {
     setLoading(true);
     try {
       const list = await api.myNotifications();
-      setNotifications(
-        list.map((n: any) => ({
-          id: n._id,
-          type: n.type,
-          title: n.title,
-          message: n.message,
-          time: new Date(n.createdAt).toLocaleString(),
-          read: n.read,
-          urgent: !!n.urgent,
-          source: n?.meta?.source,
-          requestId: n?.meta?.requestId,
-          requesterName: n?.meta?.requesterName,
-          requesterBloodType: n?.meta?.requesterBloodType,
-          requesterPhone: n?.meta?.requesterPhone,
-          urgency: n?.meta?.urgency,
-        }))
-      );
+      const shaped = list.map((n: any) => ({
+        id: n._id,
+        type: (n.type || '').toString().toLowerCase(),
+        title: n.title,
+        message: n.message,
+        createdAt: n.createdAt ? new Date(n.createdAt) : new Date(),
+        read: n.read,
+        urgent: !!n.urgent,
+        source: n?.meta?.source,
+        requestId: n?.meta?.requestId,
+        requesterName: n?.meta?.requesterName,
+        requesterBloodType: n?.meta?.requesterBloodType,
+        requesterPhone: n?.meta?.requesterPhone,
+        urgency: n?.meta?.urgency,
+      }));
+      // Show all notifications to donors so matched "request" alerts appear
+      const roleFiltered = shaped.filter((n: any) => {
+        if (role === 'donor') return true;
+        if (role === 'requester') return n.type === 'request' || n.type === 'message' || n.type === 'system';
+        return true; // both/admin/unknown -> show all
+      });
+      roleFiltered.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+      setNotifications(roleFiltered);
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
     } finally {
@@ -81,7 +87,7 @@ export default function NotificationScreen() {
       let timer: any;
       (async () => {
         await load();
-        timer = setInterval(load, 15000);
+        timer = setInterval(load, 5000);
       })();
       return () => {
         if (timer) clearInterval(timer);
@@ -104,6 +110,15 @@ export default function NotificationScreen() {
     }
   };
 
+  const getTypeLabel = (type: string) => {
+    const t = String(type || '').toLowerCase();
+    if (t === 'request') return 'Request';
+    if (t === 'donation') return 'Donor';
+    if (t === 'message') return 'Message';
+    if (t === 'system') return 'System';
+    return 'Notice';
+  };
+
   const getNotificationColor = (type: string, urgent: boolean) => {
     if (urgent) return colors.error;
     switch (type) {
@@ -122,29 +137,7 @@ export default function NotificationScreen() {
 
   // New design data shaping
   const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const scoped = useMemo(() => {
-    if (scope === 'requests') {
-      return notifications.filter((n) => n.type === 'request');
-    }
-    // donors scope: anything that is not a request (donation, message, system...)
-    return notifications.filter((n) => n.type !== 'request');
-  }, [notifications, scope]);
-
-  const filtered = useMemo(() => {
-    if (scope !== 'requests') return scoped;
-
-    // requests filters
-    return scoped.filter((n) => {
-      const urgency = String(n.urgency || '').toLowerCase();
-      if (requestFilter === 'all') return true;
-      if (requestFilter === 'unread') return !n.read;
-      if (requestFilter === 'normal') return urgency === 'normal';
-      if (requestFilter === 'urgent') return urgency === 'urgent';
-      if (requestFilter === 'critical') return urgency === 'critical';
-      return true;
-    });
-  }, [scoped, scope, requestFilter]);
+  const filtered = notifications; // already filtered by role and sorted
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -186,34 +179,7 @@ export default function NotificationScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Segmented scope tabs (Donors/Requests) */}
-          <View style={styles.segmentWrap}>
-            <Segment label="Donors" active={scope === 'donors'} onPress={() => setScope('donors')} left />
-            <Segment label="Requests" active={scope === 'requests'} onPress={() => setScope('requests')} />
-          </View>
-
-          {/* Request sub-filters (only when scope === 'requests') */}
-          {scope === 'requests' && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.subTabsContent}
-              style={styles.subTabs}
-            >
-              {(['all', 'unread', 'normal', 'urgent', 'critical'] as RequestFilter[]).map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => setRequestFilter(key)}
-                  activeOpacity={0.9}
-                  style={[styles.subTab, requestFilter === key && styles.subTabActive]}
-                >
-                  <Text style={[styles.subTabText, requestFilter === key && styles.subTabTextActive]}>
-                    {key === 'all' ? 'All' : key.charAt(0).toUpperCase() + key.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+          {/* Unified list; no tabs or filters */}
 
           {/* Removed dev helper displaying API base URL for security */}
 
@@ -222,9 +188,7 @@ export default function NotificationScreen() {
             <View style={styles.emptyState}>
               <IconSymbol name="bell.slash" size={48} color={colors.textSecondary} />
               <Text style={styles.emptyStateText}>No notifications found</Text>
-              <Text style={styles.emptyStateSubtext}>
-                {scope === 'requests' && requestFilter === 'unread' ? "You're all caught up!" : 'Check back later for updates'}
-              </Text>
+              <Text style={styles.emptyStateSubtext}>Check back later for updates</Text>
             </View>
           ) : (
             <View>
@@ -243,7 +207,11 @@ export default function NotificationScreen() {
                       } catch {}
                       if (notification.type === 'request' && notification.requestId) {
                         const target = (notification as any)?.source || (notification as any)?.meta?.source;
-                        if (target === 'blood-request') {
+                        // Donor notifications should open matched details with donor view to avoid Forbidden
+                        const role = String(user?.user?.role || '').toLowerCase();
+                        if (role === 'donor') {
+                          router.push({ pathname: '/matchedRequestDetail', params: { id: String(notification.requestId), mode: 'donor' } });
+                        } else if (target === 'blood-request') {
                           router.push({ pathname: '/requestStatus', params: { id: String(notification.requestId) } });
                         } else {
                           router.push({ pathname: '/requestDetail', params: { id: String(notification.requestId) } });
@@ -256,6 +224,7 @@ export default function NotificationScreen() {
                       <Text style={styles.cardTitle} numberOfLines={1}>
                         {notification.title}
                       </Text>
+                      <View style={styles.typeTag}><Text style={styles.typeTagText}>{getTypeLabel(notification.type)}</Text></View>
                       {!!badgeText && <Badge text={badgeText} />}
                     </View>
 
@@ -271,7 +240,7 @@ export default function NotificationScreen() {
 
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cardMessage}>{notification.message}</Text>
-                        <Text style={styles.cardTime}>{notification.time}</Text>
+                        <Text style={styles.cardTime}>{notification.createdAt?.toLocaleString?.() || ''}</Text>
                       </View>
                     </View>
 
@@ -287,27 +256,7 @@ export default function NotificationScreen() {
   );
 }
 
-function Segment({
-  active,
-  label,
-  onPress,
-  left,
-}: {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-  left?: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={onPress}
-      style={[styles.segment, active && styles.segmentActive, left ? { marginRight: 8 } : null]}
-    >
-      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
+// No segmented controls anymore
 
 function Badge({ text }: { text: 'Urgent' | 'New' | 'Info' }) {
   const bg = text === 'Urgent' ? '#F04444' : text === 'New' ? colors.primary : colors.textSecondary;
@@ -369,60 +318,9 @@ const styles = StyleSheet.create({
     paddingBottom: 88,
   },
 
-  // Scope segments
-  segmentWrap: {
-    flexDirection: 'row',
-    backgroundColor: '#F2F3F7',
-    borderRadius: radii.lg,
-    padding: 4,
-    marginBottom: spacing.lg,
-  },
-  segment: {
-    flex: 1,
-    height: 36,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  segmentText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
-  segmentTextActive: {
-    color: colors.text,
-  },
-
-  // Sub tabs (request filters)
-  subTabs: {
-    maxHeight: 48,
-    marginBottom: spacing.lg,
-  },
-  subTabsContent: {
-    paddingHorizontal: 2,
-  },
-  subTab: {
-    paddingHorizontal: 14,
-    height: 36,
-    borderRadius: 999,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  subTabActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: colors.primary,
-  },
-  subTabText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
-  subTabTextActive: { color: colors.primary },
+  // Unified small type tag
+  typeTag: { backgroundColor: '#F1F5F9', borderRadius: 999, paddingHorizontal: 8, height: 22, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  typeTagText: { color: '#475569', fontWeight: '700', fontSize: 12 },
 
   // Cards
   card: {

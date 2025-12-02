@@ -134,6 +134,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
+
+  
   text: {
     color: semanticColors.textInverse,
     fontFamily: fontFamilies.semibold,

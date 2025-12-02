@@ -59,10 +59,7 @@ function detectProjectId(): string | undefined {
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   try {
     if (isExpoGoAndroid) {
-      if (!expoGoWarned) {
-        console.warn('Expo Go (Android) does not support remote push with expo-notifications. Use a development build.');
-        expoGoWarned = true;
-      }
+      // Silently skip remote push token registration in Expo Go Android.
       return null;
     }
     const Notifications = await loadNotifications();

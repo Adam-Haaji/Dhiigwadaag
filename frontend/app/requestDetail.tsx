@@ -26,8 +26,15 @@ export default function RequestDetail() {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-  const doc = await apiClient.getRequest(id);
+      const doc = await apiClient.getRequest(id);
       setData(doc);
+      // If status is Matched, fetch requester-view for donor summary messaging
+      if (String(doc?.status || '').toLowerCase() === 'matched') {
+        try {
+          const rv = await apiClient.getRequesterMatchView(id);
+          setData((prev: any) => ({ ...prev, __requesterView: rv }));
+        } catch {}
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to load request');
     } finally {
@@ -123,6 +130,22 @@ export default function RequestDetail() {
             )}
             <Text style={s.row}>Location: <Text style={s.bold}>{data.location}</Text></Text>
             <Text style={s.row}>Status: <Text style={s.bold}>{data.status}</Text></Text>
+            {String(data.status || '').toLowerCase() === 'matched' && data.__requesterView && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{data.__requesterView.title}</Text>
+                <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>{data.__requesterView.message}</Text>
+                {data.__requesterView.donor && (
+                  <>
+                    <Text style={s.row}>Donor Blood Type: <Text style={s.bold}>{data.__requesterView.donor.bloodType}</Text></Text>
+                    <Text style={s.row}>Donor District: <Text style={s.bold}>{data.__requesterView.donor.district}</Text></Text>
+                  </>
+                )}
+                {data.__requesterView.matchedAt && (
+                  <Text style={s.row}>Matched At: <Text style={s.bold}>{new Date(data.__requesterView.matchedAt).toLocaleString()}</Text></Text>
+                )}
+                <Text style={s.row}>Note: <Text style={s.bold}>{data.__requesterView.statusNote}</Text></Text>
+              </View>
+            )}
           </View>
 
           {data.requesterId && (

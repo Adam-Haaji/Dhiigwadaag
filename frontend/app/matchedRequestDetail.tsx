@@ -8,11 +8,12 @@ import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
 
 export default function MatchedRequestDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: 'donor'|'requester' }>();
   const { user } = useAuth();
   const [request, setRequest] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<'accept'|'complete'|null>(null);
+  const [declining, setDeclining] = useState(false);
 
   const status = String(request?.status || '').toLowerCase();
   const showAcceptButton = status === 'matched';
@@ -22,7 +23,7 @@ export default function MatchedRequestDetail() {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await api.getRequest(String(id));
+      const res = mode === 'donor' ? await api.getDonorMatchView(String(id)) : await api.getRequest(String(id));
       setRequest(res);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to load');
@@ -35,7 +36,8 @@ export default function MatchedRequestDetail() {
 
   const requester = request?.requester || request?.requesterId || {};
   const requesterName = requester?.name || requester?.email || 'Requester';
-  const requesterPhone = requester?.phone || '—';
+  const isAccepted = status === 'accepted';
+  const requesterPhone = mode === 'donor' ? (isAccepted ? (requester?.phone || '—') : 'Hidden until you accept') : (requester?.phone || '—');
   const bloodType = request?.bloodType || '—';
   const units = typeof request?.units !== 'undefined' ? String(request.units) : null;
   const location = request?.location || '—';
@@ -45,7 +47,11 @@ export default function MatchedRequestDetail() {
     if (!id) return;
     setActing('accept');
     try {
-      await api.acceptDonation(String(id));
+      if (mode === 'donor') {
+        await api.acceptMatch(String(id));
+      } else {
+        await api.acceptDonation(String(id));
+      }
       await load();
       Alert.alert('Accepted', 'You accepted this request. Please proceed to donate.');
     } catch (e: any) {
@@ -59,14 +65,39 @@ export default function MatchedRequestDetail() {
     if (!id) return;
     setActing('complete');
     try {
-      await api.confirmDonationComplete(String(id));
-      Alert.alert('Thank you', 'Donation successfully recorded.');
-      router.replace('/(home)/donor');
+      await api.completeDonation(String(id));
+      router.replace('/donorMatches');
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not complete');
     } finally {
       setActing(null);
     }
+  };
+
+  const onDecline = async () => {
+    if (!id) return;
+    Alert.alert('Decline Request', 'Are you sure you want to decline this matched request?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline', style: 'destructive', onPress: async () => {
+          setDeclining(true);
+          try {
+                if (mode === 'donor') {
+                  await api.declineMatch(String(id));
+                } else {
+                  await api.declineDonation(String(id));
+                }
+            await load();
+            Alert.alert('Declined', 'You declined this request. We will try to rematch the requester.');
+            router.replace('/donorMatches');
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Could not decline');
+          } finally {
+            setDeclining(false);
+          }
+        }
+      }
+    ]);
   };
 
   return (
@@ -88,14 +119,21 @@ export default function MatchedRequestDetail() {
           <Text style={styles.meta}>Created: {createdAt}</Text>
         </View>
 
-        {showAcceptButton && (
+        {mode === 'donor' && showAcceptButton && (
           <TouchableOpacity style={[styles.btn, styles.acceptBtn]} disabled={acting==='accept'} onPress={onAccept}>
             <IconSymbol name="checkmark.circle.fill" size={20} color="#fff" />
             <Text style={styles.btnText}>{acting==='accept' ? 'Accepting...' : 'Accept & Donate'}</Text>
           </TouchableOpacity>
         )}
 
-        {showIHaveDonatedButton && (
+        {mode === 'donor' && showAcceptButton && (
+          <TouchableOpacity style={[styles.btn, styles.declineBtn]} disabled={declining} onPress={onDecline}>
+            <IconSymbol name="xmark.circle.fill" size={20} color="#fff" />
+            <Text style={styles.btnText}>{declining ? 'Declining...' : 'Decline'}</Text>
+          </TouchableOpacity>
+        )}
+
+        {mode === 'donor' && showIHaveDonatedButton && (
           <TouchableOpacity style={[styles.btn, styles.completeBtn]} disabled={acting==='complete'} onPress={onComplete}>
             <IconSymbol name="heart.fill" size={20} color="#fff" />
             <Text style={styles.btnText}>{acting==='complete' ? 'Submitting...' : 'I Have Donated'}</Text>
@@ -118,5 +156,6 @@ const styles = StyleSheet.create({
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 10 },
   acceptBtn: { backgroundColor: colors.accent },
   completeBtn: { backgroundColor: colors.primary },
+  declineBtn: { backgroundColor: '#9CA3AF' },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16, marginLeft: 8 },
 });

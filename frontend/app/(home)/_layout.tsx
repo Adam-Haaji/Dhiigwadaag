@@ -12,6 +12,8 @@ export default function TabLayout() {
 
   //  Tabs configuration
   const [activeReqCount, setActiveReqCount] = useState<number>(0);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [matchCount, setMatchCount] = useState<number>(0);
   useEffect(() => {
     async function load() {
       if (role === 'requester' || role === 'both' || role === 'admin') {
@@ -23,6 +25,39 @@ export default function TabLayout() {
       }
     }
     load();
+  }, [role]);
+
+  // Poll for unread notifications and donor matches
+  useEffect(() => {
+    let timer: any;
+    const loadCounts = async () => {
+      try {
+        const list: any[] = await api.myNotifications();
+        const shaped = list.map((n: any) => ({
+          type: (n.type || '').toString().toLowerCase(),
+          read: !!n.read,
+        }));
+        const roleFiltered = shaped.filter((n: any) => {
+          if (role === 'donor') return true;
+          if (role === 'requester') return n.type === 'request' || n.type === 'message' || n.type === 'system';
+          return true;
+        });
+        setUnreadCount(roleFiltered.filter(n => !n.read).length);
+      } catch {}
+      try {
+        if (role === 'donor' || role === 'both' || role === 'admin') {
+          const matches: any[] = await api.listMyMatches();
+          setMatchCount(Array.isArray(matches) ? matches.length : 0);
+        } else {
+          setMatchCount(0);
+        }
+      } catch {}
+    };
+    (async () => {
+      await loadCounts();
+      timer = setInterval(loadCounts, 5000);
+    })();
+    return () => { if (timer) clearInterval(timer); };
   }, [role]);
 
   const unavailableUntil = user?.user?.unavailableUntil ? new Date(user.user.unavailableUntil) : null;
@@ -112,7 +147,7 @@ export default function TabLayout() {
           animation: 'none',
         }}
       />
-      <FloatingTabBar tabs={tabs} />
+      <FloatingTabBar tabs={tabs} badges={{ notification: unreadCount, donor: matchCount, request: activeReqCount }} />
     </>
   );
 }

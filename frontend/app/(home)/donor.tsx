@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -9,7 +9,8 @@ import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 
 export default function DonorDashboard() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
+  const [switching, setSwitching] = useState(false);
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
   const unavailableUntil = user?.user?.unavailableUntil ? new Date(user.user.unavailableUntil) : null;
@@ -56,6 +57,17 @@ export default function DonorDashboard() {
 
   const handleRegister = () => router.push('/donorRegistration');
   const handleViewMatches = () => router.push('/donorMatches');
+  const handleSwitchToRequester = async () => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      const updated = await api.switchRole('requester');
+      const token = user?.token;
+      await setUser({ token, user: updated });
+      router.replace('/(home)/request');
+    } catch {}
+    setSwitching(false);
+  };
 
   const features = [
     {
@@ -133,6 +145,12 @@ export default function DonorDashboard() {
             <Text style={styles.registerButtonText}>Register as Donor</Text>
           </TouchableOpacity>
         )}
+
+        {/* Switch Role */}
+        <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchToRequester} disabled={switching}>
+          <IconSymbol name="arrow.right.arrow.left.circle.fill" size={20} color="#FFFFFF" />
+          <Text style={styles.switchBtnText}>{switching ? 'Switching...' : 'Switch to Requester'}</Text>
+        </TouchableOpacity>
 
         {/* Status Card */}
         <View style={styles.statusCard}>
@@ -351,6 +369,21 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
     elevation: 4,
+  },
+  switchBtn: {
+    backgroundColor: colors.secondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  switchBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   statusCard: {
     backgroundColor: colors.card,

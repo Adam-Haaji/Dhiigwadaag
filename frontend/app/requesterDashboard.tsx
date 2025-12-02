@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuth from '@/hooks/useAuth';
 import { colors } from '@/styles/commonStyles';
 import api from '@/service/api';
+import { router } from 'expo-router';
+import HeroCard from '@/components/HeroCard';
 
 export default function RequesterDashboard() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const role = String(user?.user?.role || '').toLowerCase();
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -20,36 +24,105 @@ export default function RequesterDashboard() {
         setActive(a);
         setPast(p);
       } catch {}
+      try {
+        // Matched donors for requester
+        const m = await api.matchRequest({});
+        if (Array.isArray(m?.matches)) setMatches(m.matches);
+      } catch {}
+      try {
+        const n = await api.myNotifications();
+        const filtered = Array.isArray(n) ? n.filter((x: any) => {
+          const t = (x?.type || '').toString().toLowerCase();
+          return t.includes('request') || t.includes('match') || t === '';
+        }) : [];
+        setNotes(filtered);
+      } catch {}
     })();
   }, []);
 
   return (
     <SafeAreaView style={s.container}>
-      <ScrollView contentContainerStyle={s.content}>
-        <Text style={s.title}>Requester Dashboard</Text>
-        <View style={s.card}>
-          <Text style={s.label}>My Active Requests</Text>
-          {active.length === 0 ? <Text style={s.muted}>No active requests.</Text> : active.map((r, i) => (
-            <Text key={i} style={s.value}>{r.patientName || r.bloodType} · {r.status}</Text>
-          ))}
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        {/* Hero (top rectangle styled like image 1) */}
+        <HeroCard
+          title="Choose Your Path"
+          subtitle="Donate blood or request help"
+          ctas={[
+            { icon: 'heart.fill', bg: '#2B79F7', onPress: () => router.push('/createRequest') },
+            { icon: 'person.2.fill', bg: '#F59E0B', onPress: () => router.push('/searchDonor') },
+          ]}
+        />
+
+        {/* Role switch action */}
+        <View style={s.topActionsRow}>
+          <Pressable
+            onPress={async () => {
+              try {
+                const updated = await api.switchRole('donor');
+                const token = user?.token;
+                await setUser({ token, user: updated });
+                router.replace('/donorDashboard');
+              } catch {}
+            }}
+            style={({ pressed }) => [s.switchPill, pressed && { transform: [{ scale: 0.98 }] }]}
+          >
+            <Text style={s.switchPillText}>⇄ Switch to Donor</Text>
+          </Pressable>
         </View>
+
+        {/* Your Request Card */}
         <View style={s.card}>
-          <Text style={s.label}>My Past Requests</Text>
-          {past.length === 0 ? <Text style={s.muted}>No past requests.</Text> : past.map((r, i) => (
-            <Text key={i} style={s.value}>{r.patientName || r.bloodType} · {r.status}</Text>
-          ))}
+          <Text style={s.cardTitle}>Your Blood Requests</Text>
+          {active.length ? active.slice(0,5).map((r, i) => (
+            <View style={s.listItem} key={String(r._id || i)}>
+              <Text style={s.itemTitle}>{r.patientName || r.bloodType}</Text>
+              <Text style={s.itemMeta}>{r.urgency || r.status}</Text>
+            </View>
+          )) : <Text style={s.empty}>No active requests.</Text>}
         </View>
+
+        {/* Matched Donors */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Matched Donors</Text>
+          {matches?.length ? matches.slice(0,5).map((d: any, i: number) => (
+            <View style={s.listItem} key={String(d._id || i)}>
+              <Text style={s.itemTitle}>{d.name || d.fullName || 'Donor'}</Text>
+              <Text style={s.itemMeta}>{d.bloodType || d.bloodGroup}</Text>
+            </View>
+          )) : <Text style={s.empty}>No matches yet.</Text>}
+        </View>
+
+        {/* Notifications */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Notifications</Text>
+          {notes?.length ? notes.slice(0,5).map((n: any, i: number) => (
+            <View style={s.listItem} key={String(n._id || i)}>
+              <Text style={s.itemTitle}>{n.title || n.message || 'Notification'}</Text>
+              <Text style={s.itemMeta}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</Text>
+            </View>
+          )) : <Text style={s.empty}>No notifications.</Text>}
+        </View>
+
+        <TouchableOpacity style={s.profileBtn} onPress={() => router.push('/(home)/profile')}>
+          <Text style={s.profileBtnText}>Go to Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 20 },
-  title: { fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 12 },
-  card: { backgroundColor: colors.card, padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  label: { fontSize: 14, fontWeight: '600', color: colors.text },
-  value: { marginTop: 6, fontWeight: '700', color: colors.text },
-  muted: { marginTop: 6, color: colors.textSecondary }
+  container: { flex: 1, backgroundColor: '#F5F6F8' },
+  content: { paddingVertical: 16, paddingBottom: 40 },
+  topActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: 8 },
+  switchPill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#DADDE1' },
+  switchPillText: { color: '#111827', fontWeight: '700' },
+  card: { alignSelf: 'center', width: '92%', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginTop: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  listItem: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingVertical: 10 },
+  itemTitle: { color: '#111827', fontWeight: '600' },
+  itemMeta: { color: '#6B7280', marginTop: 2 },
+  empty: { color: '#6B7280' },
+  profileBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: '#2B79F7', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+  profileBtnText: { color: '#fff', fontWeight: '700' }
 });

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Blood Donation App",
-  "slug": "blood-donation-app-dev",
+    "slug": "blood-donation-app-dev",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "frontend",
@@ -28,14 +28,15 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.blooddonation.dev"
     },
-    
     "plugins": [
       "expo-router",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-web-browser"
     ],
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "REPLACE-WITH-YOUR-EAS-PROJECT-ID"
+        "projectId": "f9e3d7a9-8667-4cb1-aac3-5c742d631c2b"
       }
     }
   }

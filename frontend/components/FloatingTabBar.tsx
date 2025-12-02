@@ -34,13 +34,15 @@ interface FloatingTabBarProps {
   containerWidth?: number;
   borderRadius?: number;
   bottomMargin?: number;
+  badges?: Record<string, number>; // optional badge counts by tab name
 }
 
 export default function FloatingTabBar({
   tabs,
   containerWidth = screenWidth - 40, // Make it wider to fit larger buttons
   borderRadius = 30,
-  bottomMargin
+  bottomMargin,
+  badges
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -171,6 +173,7 @@ export default function FloatingTabBar({
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
+              const badgeCount = badges?.[tab.name] ?? 0;
 
               return (
                 <TouchableOpacity
@@ -185,6 +188,11 @@ export default function FloatingTabBar({
                       size={28} // Increased icon size from 24 to 28
                       color={isActive ? '#E74C3C' : '#666666'}
                     />
+                    {!!badgeCount && (
+                      <View style={styles.badgeWrap}>
+                        <Text style={styles.badgeText}>{badgeCount > 99 ? '99+' : String(badgeCount)}</Text>
+                      </View>
+                    )}
                     <Text
                       style={[
                         styles.tabLabel,
@@ -260,5 +268,22 @@ const styles = StyleSheet.create({
     marginTop: 3, // Increased from 2 to 3
     textAlign: 'center',
     // Dynamic styling applied in component
+  },
+  badgeWrap: {
+    position: 'absolute',
+    top: -2,
+    right: -12,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#E74C3C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
