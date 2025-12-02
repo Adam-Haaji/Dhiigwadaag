@@ -56,6 +56,54 @@ export const semanticColors = {
   cardShadow: 'rgba(0,0,0,0.06)',
 };
 
+// Apply light/dark theme by mutating semantic tokens in-place so components update dynamically
+export function applyTheme(isDark: boolean) {
+  if (!isDark) {
+    // Light theme
+    semanticColors.bgSurface = palette.white;
+    semanticColors.bgAlt = palette.gray50;
+    semanticColors.bgElevated = palette.white;
+    semanticColors.borderSubtle = palette.gray200;
+    semanticColors.borderStrong = palette.gray300;
+    semanticColors.textPrimary = palette.gray900;
+    semanticColors.textSecondary = palette.gray600;
+    semanticColors.textMuted = palette.gray500;
+    semanticColors.textInverse = palette.white;
+    semanticColors.interactivePrimary = palette.brand;
+    semanticColors.interactivePrimaryHover = palette.brandBright;
+    semanticColors.interactivePrimaryActive = palette.brandDark;
+    semanticColors.interactiveDanger = palette.danger;
+    semanticColors.focusRing = palette.brandBright;
+    semanticColors.cardShadow = 'rgba(0,0,0,0.06)';
+  } else {
+    // Dark theme (aligned with Settings screen palette)
+    // Base neutrals
+    const BG_DARK = '#0F1115';
+    const CARD_DARK = '#1F2937';
+    const BORDER_DARK = '#374151';
+    const TEXT_DARK = '#F9FAFB';
+    const TEXT_MUTED_DARK = '#9CA3AF';
+    const TEXT_SECONDARY_DARK = '#9CA3AF';
+
+    semanticColors.bgSurface = CARD_DARK;        // cards and inputs
+    semanticColors.bgAlt = BG_DARK;              // screen background
+    semanticColors.bgElevated = CARD_DARK;       // elevated surfaces
+    semanticColors.borderSubtle = BORDER_DARK;   // subtle borders
+    semanticColors.borderStrong = '#4B5563';     // stronger separators
+    semanticColors.textPrimary = TEXT_DARK;
+    semanticColors.textSecondary = TEXT_SECONDARY_DARK;
+    semanticColors.textMuted = TEXT_MUTED_DARK;
+    semanticColors.textInverse = palette.white;  // text on primary buttons stays white
+    // Keep brand reds for contrast on dark
+    semanticColors.interactivePrimary = palette.brand;
+    semanticColors.interactivePrimaryHover = palette.brandBright;
+    semanticColors.interactivePrimaryActive = palette.brandDark;
+    semanticColors.interactiveDanger = palette.danger;
+    semanticColors.focusRing = palette.brandBright;
+    semanticColors.cardShadow = 'rgba(0,0,0,0.35)';
+  }
+}
+
 export const gradients = {
   brand: [palette.brandGradFrom, palette.brandGradTo],
   subtleVertical: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.6)'],

@@ -9,6 +9,7 @@ import {
   GestureResponderEvent,
   DimensionValue,
 } from 'react-native';
+import { semanticColors } from '@/constants/colors';
 
 type Option = { label: string; value: string };
 
@@ -50,42 +51,47 @@ export const SelectField: React.FC<SelectFieldProps> = ({
 
   return (
     <View style={[styles.wrapper, { width }]}>
-      <Text style={styles.label}>
+      <Text style={[styles.label, { color: semanticColors.textPrimary }]}>
         {label}
-        {required ? <Text style={styles.required}> *</Text> : null}
+        {required ? <Text style={[styles.required, { color: semanticColors.interactiveDanger }]}> *</Text> : null}
       </Text>
 
       <TouchableOpacity
         onPress={open}
         activeOpacity={0.8}
-        style={[styles.input, !!error && styles.inputError]}
+        style={[
+          styles.input,
+          { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle },
+          !!error && { borderColor: semanticColors.interactiveDanger },
+        ]}
         testID={testID}
       >
         <Text
           style={[
             styles.valueText,
-            !selectedLabel && styles.placeholderText,
+            { color: semanticColors.textPrimary },
+            !selectedLabel && { color: semanticColors.textMuted },
           ]}
           numberOfLines={1}
         >
           {selectedLabel || placeholder}
         </Text>
-        <Text style={styles.caret}>▾</Text>
+        <Text style={[styles.caret, { color: semanticColors.textMuted }]}>▾</Text>
       </TouchableOpacity>
 
-      {!!error && <Text style={styles.errorText}>{error}</Text>}
+      {!!error && <Text style={[styles.errorText, { color: semanticColors.interactiveDanger }]}>{error}</Text>}
 
       <Modal transparent animationType="fade" visible={visible} onRequestClose={close}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={close}>
           <View />
         </TouchableOpacity>
 
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{label}</Text>
+        <View style={[styles.modalCard, { backgroundColor: semanticColors.bgSurface }]}>
+          <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>{label}</Text>
           <FlatList
             data={options}
             keyExtractor={(item) => item.value}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: semanticColors.borderSubtle }]} />}
             renderItem={({ item }) => {
               const selected = item.value === value;
               return (
@@ -96,7 +102,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
                   }}
                   style={styles.optionRow}
                 >
-                  <Text style={[styles.optionLabel, selected && styles.optionSelected]}>
+                  <Text style={[styles.optionLabel, { color: semanticColors.textPrimary }, selected && { color: semanticColors.interactivePrimary, fontWeight: '700' }]}>
                     {item.label}
                   </Text>
                 </TouchableOpacity>
@@ -106,7 +112,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
           />
 
           <TouchableOpacity style={styles.cancelBtn} onPress={close}>
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={[styles.cancelText, { color: semanticColors.textSecondary }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -120,19 +126,15 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: '#374151',
     marginBottom: 6,
     fontWeight: '600',
   },
   required: {
-    color: '#E74C3C',
     fontWeight: '700',
   },
   input: {
     height: 44,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 10,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -150,7 +152,6 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontSize: 14,
-    color: '#111827',
     flex: 1,
   },
   placeholderText: {
@@ -158,12 +159,10 @@ const styles = StyleSheet.create({
   },
   caret: {
     fontSize: 16,
-    color: '#6B7280',
     marginLeft: 8,
   },
   errorText: {
     marginTop: 6,
-    color: '#EF4444',
     fontSize: 12,
   },
   backdrop: {
@@ -175,7 +174,6 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 22,
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -190,7 +188,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   optionRow: {
@@ -200,15 +197,12 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 15,
-    color: '#111827',
   },
   optionSelected: {
-    color: '#B91C1C',
     fontWeight: '700',
   },
   separator: {
     height: 1,
-    backgroundColor: '#F3F4F6',
   },
   cancelBtn: {
     alignSelf: 'flex-end',
@@ -217,7 +211,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   cancelText: {
-    color: '#6B7280',
     fontWeight: '600',
   },
 });

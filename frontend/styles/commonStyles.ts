@@ -1,21 +1,23 @@
 import { StyleSheet } from 'react-native';
 import { moderateScale, responsiveFont, layout } from '../constants/theme';
+import colorsBase, { semanticColors, gradients } from '@/constants/colors';
 
+// Theme-aware shared colors for screens using common styles
 export const colors = {
-  primary: '#E74C3C',      // Red for blood donation theme
-  secondary: '#3498DB',    // Blue for secondary actions
-  accent: '#F39C12',       // Orange for highlights
-  background: '#F8F8FF',   // Light off-white background
-  backgroundAlt: '#FFFFFF', // White for cards
-  text: '#333333',         // Dark gray text
-  textSecondary: '#666666', // Medium gray text
-  grey: '#CCCCCC',         // Light grey
-  card: '#FFFFFF',         // White card background
-  highlight: '#FFC0CB',    // Light pink highlight
-  success: '#27AE60',      // Green for success states
-  warning: '#F39C12',      // Orange for warnings
-  error: '#E74C3C',        // Red for errors
-  border: '#E0E0E0',       // Light border color
+  primary: colorsBase.palette.brandBright,
+  secondary: '#3498DB',
+  accent: '#F39C12',
+  background: semanticColors.bgAlt,
+  backgroundAlt: semanticColors.bgSurface,
+  text: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  grey: '#CCCCCC',
+  card: semanticColors.bgSurface,
+  highlight: '#FFC0CB',
+  success: '#27AE60',
+  warning: '#F39C12',
+  error: colorsBase.palette.danger,
+  border: semanticColors.borderSubtle,
 };
 
 export const buttonStyles = StyleSheet.create({
