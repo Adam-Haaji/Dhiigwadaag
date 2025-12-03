@@ -22,7 +22,22 @@ export default function SearchDonor() {
     }
   };
 
-  useEffect(() => { doSearch(); }, []);
+  // Initial search with no filters to populate list
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setError(null); setLoading(true);
+      try {
+        const data = await api.searchDonors({ availability: true });
+        if (!cancelled) setResults(data);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || 'Search failed');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>

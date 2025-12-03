@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -9,16 +9,16 @@ import useAuth from '@/hooks/useAuth';
 
 export default function MatchedRequestDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const [request, setRequest] = useState<any | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
   const [acting, setActing] = useState<'accept'|'complete'|null>(null);
 
   const status = String(request?.status || '').toLowerCase();
   const showAcceptButton = status === 'matched';
   const showIHaveDonatedButton = status === 'accepted';
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
@@ -29,9 +29,9 @@ export default function MatchedRequestDetail() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const requester = request?.requester || request?.requesterId || {};
   const requesterName = requester?.name || requester?.email || 'Requester';

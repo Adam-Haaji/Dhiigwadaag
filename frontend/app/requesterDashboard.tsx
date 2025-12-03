@@ -7,7 +7,7 @@ import api from '@/service/api';
 
 export default function RequesterDashboard() {
   const { user } = useAuth();
-  const role = String(user?.user?.role || '').toLowerCase();
+  const _role = String(user?.user?.role || '').toLowerCase();
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
 

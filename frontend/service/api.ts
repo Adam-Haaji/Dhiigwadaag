@@ -54,9 +54,11 @@ const HOST_IP = detectHostIp();
 const DEFAULT_BASE = HOST_IP
   ? `http://${HOST_IP}:5000`
   : (Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000');
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_BASE;
-const RAW_TIMEOUT = process.env.EXPO_PUBLIC_API_TIMEOUT_MS;
-const REQUEST_TIMEOUT_MS = RAW_TIMEOUT !== undefined ? Number(RAW_TIMEOUT) : 10000;
+// Support both build-time public env and app.json extras
+const extras: any = (Constants as any)?.expoConfig?.extra || {};
+const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || extras.EXPO_PUBLIC_API_BASE_URL || DEFAULT_BASE) as string;
+const RAW_TIMEOUT = (process.env.EXPO_PUBLIC_API_TIMEOUT_MS || extras.EXPO_PUBLIC_API_TIMEOUT_MS) as any;
+const REQUEST_TIMEOUT_MS = RAW_TIMEOUT !== undefined ? Number(RAW_TIMEOUT) : 25000;
 const USE_TIMEOUT = Number.isFinite(REQUEST_TIMEOUT_MS) && REQUEST_TIMEOUT_MS > 0;
 const TOKEN_KEY = '@token';
 
@@ -201,6 +203,8 @@ export const api = {
   registerPushToken: (token: string) => request('POST', '/api/notifications/register-token', { token }),
   // Smart matching route
   matchRequest: (data: { requestId?: string; bloodType?: string; bloodGroup?: string; district?: string; location?: string; urgency?: 'Normal'|'Urgent'|'Critical'|string; urgentLevel?: string; lat?: number; lng?: number; }) => request('POST', '/api/match/request', data),
+  // Donor -> recipients compatibility lookup (server route may be implemented later)
+  matchRecipients: (data: { type: string }) => request('POST', '/api/match/recipients', data),
   // donations (history)
   getMyDonations: () => request('GET', '/api/donations/mine'),
 };
