@@ -199,6 +199,7 @@ export const api = {
     if (result?.token) await setToken(result.token);
     return result;
   },
+  changePassword: (oldPassword: string, newPassword: string) => request('POST', '/api/auth/change', { oldPassword, newPassword }),
   // users
   me: () => request('GET', '/api/users/me'),
   updateMe: (data: Json) => request('PUT', '/api/users/me', data),

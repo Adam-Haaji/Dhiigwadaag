@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuth from '@/hooks/useAuth';
 import { colors } from '@/styles/commonStyles';
 import api from '@/service/api';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import HeroCard from '@/components/HeroCard';
 
 export default function DonorDashboard() {
+  const router = useRouter();
   const { user, setUser } = useAuth();
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
