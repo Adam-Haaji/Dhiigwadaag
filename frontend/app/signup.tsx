@@ -15,7 +15,7 @@ const Signup = () => {
   const [error, setError] = useState<string | null>(null);
   // Auth hook not needed here (no immediate login after signup)
 
-  const onSubmit = async ({ name, email, phone, bloodType, password, confirmPassword }: any) => {
+  const onSubmit = async ({ name, email, phone, bloodType, password, confirmPassword: _confirmPassword }: any) => {
     setError(null);
     setLoading(true);
     try {

@@ -122,7 +122,7 @@ type Props = {
 };
 
 export default function ResetPasswordScreen({ email }: Props) {
-  const { isDark } = useTheme();
+  const { isDark: _isDark } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
   if (!email && params?.email && typeof params.email === 'string') {
     email = params.email;

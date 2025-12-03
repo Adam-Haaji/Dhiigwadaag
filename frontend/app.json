@@ -41,6 +41,10 @@
       "eas": {
         "projectId": "f9e3d7a9-8667-4cb1-aac3-5c742d631c2b"
       }
+        "projectId": "REPLACE-WITH-YOUR-EAS-PROJECT-ID"
+      },
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.100:5000",
+      "EXPO_PUBLIC_API_TIMEOUT_MS": 15000
     }
   }
 }

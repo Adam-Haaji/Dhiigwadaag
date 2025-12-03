@@ -62,12 +62,12 @@ export default function Settings() {
   const [locationAllowed, setLocationAllowed] = React.useState(true);
   const { isDark, toggleDark } = useTheme();
   const { user } = useAuth();
-  const roleLabel = String((user as any)?.role || 'Unknown');
+  const _roleLabel = String((user as any)?.role || 'Unknown');
 
-  const onLogout = () => {
+  const _onLogout = () => {
     Alert.alert("Logout", "This is a UI-only action.");
   };
-  const onDelete = () => {
+  const _onDelete = () => {
     Alert.alert("Delete Account", "This is a UI-only action.");
   };
 
@@ -80,10 +80,10 @@ export default function Settings() {
 
   const bg = isDark ? BG_DARK : BG;
   const text = isDark ? TEXT_DARK : TEXT;
-  const textMuted = isDark ? TEXT_MUTED_DARK : TEXT_MUTED;
+  const _textMuted = isDark ? TEXT_MUTED_DARK : TEXT_MUTED;
   const card = isDark ? CARD_DARK : CARD;
   const border = isDark ? BORDER_DARK : BORDER;
-  const highlight = isDark ? HIGHLIGHT_DARK : HIGHLIGHT;
+  const _highlight = isDark ? HIGHLIGHT_DARK : HIGHLIGHT;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: bg }]}>
