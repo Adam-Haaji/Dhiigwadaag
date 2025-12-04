@@ -1,6 +1,7 @@
 // Simple API client with token storage and helpers
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import API_URL from '@/config/api';
 
 type Json = Record<string, any> | undefined;
 
@@ -50,12 +51,8 @@ function detectHostIp(): string | null {
 }
 
 const HOST_IP = detectHostIp();
-// Choose sensible defaults:
-// - Android emulator: always prefer 10.0.2.2 (maps to host machine)
-// - iOS simulator: prefer detected LAN IP, else localhost
-const DEFAULT_BASE = Platform.OS === 'android'
-  ? 'http://10.0.2.2:5000'
-  : (HOST_IP ? `http://${HOST_IP}:5000` : 'http://localhost:5000');
+// Centralized production base URL (Render)
+const DEFAULT_BASE = API_URL;
 // Read runtime config:
 // 1) Prefer EXPO_PUBLIC_* from process.env when present
 // 2) Fallback to expo config extras (app.json -> expo.extra)
@@ -67,7 +64,8 @@ const envTimeout = (typeof process !== 'undefined' && (process as any)?.env?.EXP
   ? (process as any).env.EXPO_PUBLIC_API_TIMEOUT_MS
   : extras.EXPO_PUBLIC_API_TIMEOUT_MS;
 
-const BASE_URL = envBase || DEFAULT_BASE;
+// Force using centralized API URL for production builds
+const BASE_URL = DEFAULT_BASE;
 const RAW_TIMEOUT = envTimeout;
 const REQUEST_TIMEOUT_MS = RAW_TIMEOUT !== undefined ? Number(RAW_TIMEOUT) : 10000;
 const USE_TIMEOUT = Number.isFinite(REQUEST_TIMEOUT_MS) && REQUEST_TIMEOUT_MS > 0;
@@ -77,7 +75,8 @@ async function getToken() { return AsyncStorage.getItem(TOKEN_KEY); }
 async function setToken(t: string) { return AsyncStorage.setItem(TOKEN_KEY, t); }
 async function clearToken() { return AsyncStorage.removeItem(TOKEN_KEY); }
 
-let RESOLVED_BASE: string | null = null;
+// Use the centralized API URL immediately; avoid pinging or local fallbacks
+let RESOLVED_BASE: string | null = API_URL;
 let resolvingBasePromise: Promise<string> | null = null;
 
 async function pingBase(base: string, timeoutMs = 1500): Promise<boolean> {
@@ -101,18 +100,12 @@ async function resolveBaseUrl(): Promise<string> {
   const extras: any = (Constants as any)?.expoConfig?.extra || {};
   const extraBase = extras.EXPO_PUBLIC_API_BASE_URL as string | undefined;
   const candidatesRaw: (string | undefined)[] = [];
-  // Prioritize explicit env/expo config first
-  if (envBase) candidatesRaw.push(envBase);
-  if (extraBase && extraBase !== envBase) candidatesRaw.push(extraBase);
-  if (Platform.OS === 'android') {
-    candidatesRaw.push('http://10.0.2.2:5000');
-    candidatesRaw.push('http://localhost:5000'); // works with `adb reverse`
-    if (HOST_IP) candidatesRaw.push(`http://${HOST_IP}:5000`);
-  } else {
-    if (HOST_IP) candidatesRaw.push(`http://${HOST_IP}:5000`);
-    candidatesRaw.push('http://localhost:5000');
-  }
-  // Always fall back to computed default as last resort
+  // Always prioritize centralized API URL
+  candidatesRaw.push(API_URL);
+  // Allow explicit env/expo config as secondary (for dev only)
+  if (envBase && envBase !== API_URL) candidatesRaw.push(envBase);
+  if (extraBase && extraBase !== API_URL && extraBase !== envBase) candidatesRaw.push(extraBase);
+  // Final fallback
   candidatesRaw.push(DEFAULT_BASE);
   const candidates = unique(candidatesRaw);
 
@@ -175,12 +168,7 @@ async function request(method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path: string
     }
     const msg = (e?.message || '').toLowerCase();
     if (msg.includes('network request failed') || msg.includes('failed to fetch')) {
-      if (__DEV__) {
-        const platformTip = Platform.OS === 'android'
-          ? 'Android emulator: use 10.0.2.2:5000; real device: set EXPO_PUBLIC_API_BASE_URL to your LAN IP'
-          : 'iOS simulator: localhost works only on same Mac; real iPhone: set EXPO_PUBLIC_API_BASE_URL to your LAN IP';
-        console.warn('[API] Network unreachable', { baseUrl: base, tip: platformTip });
-      }
+      if (__DEV__) console.warn('[API] Network unreachable', { baseUrl: base });
       throw new Error('Network error. Please check your connection.');
     }
     throw e;
