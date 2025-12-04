@@ -22,6 +22,10 @@
     },
     "android": {
       "package": "com.adam_moha.blooddonationappdev"
-    }
+    },
+    "assetBundlePatterns": [
+      "**/*",
+      "assets/image/android/*/*"
+    ]
   }
 }
