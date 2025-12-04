@@ -3,14 +3,14 @@
     "name": "Blood Donation App",
     "slug": "blood-donation-app-dev",
     "version": "1.0.0",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "updates": {
       "enabled": false,
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_ERROR_RECOVERY"
     },
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": false
     },
     "extra": {
       "router": {},
