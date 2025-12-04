@@ -3,9 +3,6 @@
     "name": "Blood Donation App",
     "slug": "blood-donation-app-dev",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "updates": {
       "enabled": false,
@@ -15,36 +12,13 @@
     "experiments": {
       "typedRoutes": true
     },
-    "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        },
-        "LSApplicationQueriesSchemes": [
-          "whatsapp"
-        ]
-      }
-    },
-    "android": {
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.blooddonation.dev"
-    },
-    "plugins": [
-      "expo-router",
-      "expo-notifications",
-      "expo-web-browser"
-    ],
     "extra": {
       "router": {},
+      "EXPO_PUBLIC_API_BASE_URL": "https://api-smart-blood.onrender.com",
+      "EXPO_PUBLIC_API_TIMEOUT_MS": 25000,
       "eas": {
         "projectId": "f9e3d7a9-8667-4cb1-aac3-5c742d631c2b"
       }
-        "projectId": "REPLACE-WITH-YOUR-EAS-PROJECT-ID"
-      },
-      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.100:5000",
-      "EXPO_PUBLIC_API_TIMEOUT_MS": 15000
     }
   }
 }

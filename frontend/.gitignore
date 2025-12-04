@@ -12,6 +12,10 @@ backend/node_modules/
 frontend/dist/
 frontend/web-build/
 
+# Native projects (ignore to use Prebuild/CNG)
+android/
+ios/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
