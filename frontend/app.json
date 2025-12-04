@@ -19,6 +19,9 @@
       "eas": {
         "projectId": "f9e3d7a9-8667-4cb1-aac3-5c742d631c2b"
       }
+    },
+    "android": {
+      "package": "com.adam_moha.blooddonationappdev"
     }
   }
 }

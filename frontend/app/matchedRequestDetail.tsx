@@ -10,8 +10,6 @@ import useAuth from '@/hooks/useAuth';
 export default function MatchedRequestDetail() {
   const { id, mode } = useLocalSearchParams<{ id: string; mode?: 'donor'|'requester' }>();
   const { user } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { user: _user } = useAuth();
   const [request, setRequest] = useState<any | null>(null);
   const [_loading, setLoading] = useState(false);
   const [acting, setActing] = useState<'accept'|'complete'|null>(null);
@@ -32,7 +30,7 @@ export default function MatchedRequestDetail() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, mode]);
 
   useEffect(() => { load(); }, [load]);
 
