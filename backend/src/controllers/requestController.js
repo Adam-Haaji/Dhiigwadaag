@@ -4,6 +4,8 @@ import Notification from '../models/Notification.js';
 import BloodRequest from '../models/BloodRequest.js';
 import Donor from '../models/Donor.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
+import { getDistrictExpansionOrder } from '../utils/districtNeighbors.js';
+import { isValidLocation } from '../utils/locations.js';
 
 export const createRequest = async (req, res) => {
   try {
@@ -22,6 +24,10 @@ export const createRequest = async (req, res) => {
     if (!location || /^unknown$/i.test(String(location))) {
       location = requester?.location || 'Unknown';
     }
+    // Enforce standardized locations
+    if (!isValidLocation(location)) {
+      return res.status(400).json({ error: 'Invalid location. Please select a valid district.' });
+    }
     // Validate units (require at least 1)
     if (!Number.isFinite(units) || units < 1) units = 1;
 
@@ -36,6 +42,18 @@ export const createRequest = async (req, res) => {
         ? { name: requester.name, phone: requester.phone, email: requester.email }
         : undefined),
     });
+
+    // Auto-upgrade the user's role to requester/both upon creating a request
+    try {
+      const userDoc = await User.findById(req.user?.id);
+      if (userDoc) {
+        const current = String(userDoc.role || '').toLowerCase();
+        userDoc.role = (current === 'donor' || current === 'both') ? 'both' : 'requester';
+        await userDoc.save();
+      }
+    } catch (roleErr) {
+      console.warn('Role upgrade failed:', roleErr?.message || roleErr);
+    }
 
     // Broadcast a notification to EVERY user in the app so all users see the new request
     try {
@@ -62,6 +80,11 @@ export const createRequest = async (req, res) => {
       console.error('Notification enqueue error:', notifyErr?.message || notifyErr);
     }
     res.status(201).json(request);
+    // Fire-and-forget real-time matcher for legacy Request model
+    try {
+      const { onRequestCreated } = await import('../services/realtimeMatcher.js');
+      onRequestCreated(request).catch(() => {});
+    } catch (_) {}
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -104,29 +127,139 @@ export const emergencyBroadcast = async (req, res) => {
   }
 };
 
+// POST /api/requests/emergency/create
+export const createEmergencyRequest = async (req, res) => {
+  try {
+    const { bloodType, location, hospitalName, phone, units, reason } = req.body || {};
+    if (!bloodType) return res.status(400).json({ error: 'bloodType is required' });
+    if (!location) return res.status(400).json({ error: 'location is required' });
+    if (!isValidLocation(location)) return res.status(400).json({ error: 'Invalid location. Please select a valid district.' });
+    if (!phone || !/^\+?[0-9()\-\s]{7,}$/.test(String(phone))) return res.status(400).json({ error: 'valid phone is required' });
+
+    // Prevent duplicate emergency within 30 minutes by same requester
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const recentSame = await Request.findOne({ requesterId: req.user.id, requestType: 'emergency', createdAt: { $gte: thirtyMinAgo } });
+    if (recentSame) return res.status(429).json({ error: 'Please wait before creating another emergency request' });
+
+    const doc = await Request.create({
+      patientName: 'Emergency',
+      bloodType: String(bloodType).toUpperCase(),
+      location: String(location),
+      hospitalName,
+      contactPhone: String(phone),
+      units: Number(units) > 0 ? Number(units) : undefined,
+      urgency: 'Critical',
+      status: 'Waiting',
+      requestType: 'emergency',
+      requesterId: req.user.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      notes: reason ? String(reason).slice(0, 100) : undefined,
+    });
+
+    // Match donors: exact first then compatible; expand by district proximity
+    const districts = getDistrictExpansionOrder(String(location));
+    const type = String(bloodType).toUpperCase();
+    const compatible = {
+      'O-': ['O-'],
+      'O+': ['O+', 'O-'],
+      'A-': ['A-', 'O-'],
+      'A+': ['A+', 'A-', 'O+', 'O-'],
+      'B-': ['B-', 'O-'],
+      'B+': ['B+', 'B-', 'O+', 'O-'],
+      'AB-': ['AB-', 'A-', 'B-', 'O-'],
+      'AB+': ['AB+', 'AB-', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-'],
+    };
+    const wanted = compatible[type] || [type];
+
+    const donorCandidates = await Promise.all(districts.map((d) => (
+      Donor.find({
+        district: { $regex: new RegExp(d, 'i') },
+        bloodGroup: { $in: wanted },
+        availabilityStatus: 'available',
+        isActive: true,
+      }).select('_id user fullName phone bloodGroup district').lean()
+    )));
+    const donorsFlat = donorCandidates.flat();
+
+    // Eligibility filter
+    const eligibleDonors = [];
+    for (const dn of donorsFlat) {
+      try {
+        const u = await User.findById(dn.user).lean();
+        if (!u) continue;
+        const elig = evaluateEligibility({ age: u.age, weightKg: u.weightKg, gender: u.gender, hb: u.hb, lastDonationDate: u.lastDonationDate });
+        if (elig.eligible) eligibleDonors.push(dn);
+      } catch {}
+    }
+
+    // Notify donors immediately with emergency type
+    const notifications = eligibleDonors.map((dn) => ({
+      userId: dn.user,
+      title: '🚨 EMERGENCY BLOOD REQUEST',
+      message: `Blood Type: ${type}\nLocation: ${location}${hospitalName ? `\nHospital: ${hospitalName}` : ''}\nTap to respond immediately`,
+      type: 'emergency',
+      urgent: true,
+      meta: { requestId: doc._id, bloodType: type, location, hospitalName, phone },
+    }));
+    if (notifications.length) await Notification.insertMany(notifications);
+
+    return res.status(201).json({ success: true, request: doc, notified: notifications.length });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 // GET /api/requests/:id - fetch a single request with requester details
 export const getRequestById = async (req, res) => {
   try {
     const { id } = req.params;
+    const viewerRole = String(req.user?.role || '').toLowerCase();
     // Try legacy Request first
     let doc = await Request.findById(id)
       .populate('requesterId', 'name email phone bloodType location')
       .populate('matchedDonorId', 'name email phone')
       .populate('contactedBy.donorId');
     if (doc) {
-      // Only requester (owner) or matched donor (via donor user) can view legacy doc
+      // Determine ownership/match access
       const isOwner = String(doc.requesterId?._id || doc.requesterId) === String(req.user?.id);
       let isMatchedDonorUser = false;
       try {
         if (doc.matchedDonorId) {
-          const donor = await Donor.findById(doc.matchedDonorId).select('user');
-          isMatchedDonorUser = donor?.user && String(donor.user) === String(req.user?.id);
+          // Support legacy shape where matchedDonorId can be a Donor _id or a User _id
+          const md = String(doc.matchedDonorId);
+          if (md === String(req.user?.id)) {
+            isMatchedDonorUser = true;
+          } else {
+            const donor = await Donor.findById(doc.matchedDonorId).select('user');
+            isMatchedDonorUser = donor?.user && String(donor.user) === String(req.user?.id);
+          }
         }
       } catch {}
-      if (!isOwner && !isMatchedDonorUser && String(req.user?.role||'').toLowerCase() !== 'admin') {
-        return res.status(403).json({ error: 'Forbidden' });
+
+      if (isOwner || isMatchedDonorUser || viewerRole === 'admin') {
+        return res.json(doc);
       }
-      return res.json(doc);
+
+      // Fallback: sanitized donor view (hide requester contact info)
+      if (viewerRole === 'donor') {
+        const sanitized = {
+          _id: doc._id,
+          patientName: doc.patientName,
+          bloodType: doc.bloodType,
+          location: doc.location,
+          units: doc.units,
+          urgency: doc.urgency,
+          status: doc.status,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          requester: doc.requesterId ? { name: doc.requesterId.name || 'Requester', phone: (isMatchedDonorUser || doc.status === 'Accepted' || doc.status === 'Fulfilled') ? doc.requesterId.phone : undefined } : undefined,
+          contactHidden: !(isMatchedDonorUser || doc.status === 'Accepted' || doc.status === 'Fulfilled'),
+          viewer: 'donor',
+        };
+        return res.json(sanitized);
+      }
+
+      return res.status(403).json({ error: 'Forbidden' });
     }
 
     // Fallback: Try new BloodRequest and map to legacy shape expected by old detail screen
@@ -169,10 +302,30 @@ export const getRequestById = async (req, res) => {
     try {
       if (br.donorId?.user) isMatchedDonorUser = String(br.donorId.user) === String(req.user?.id);
     } catch {}
-    if (!isOwner && !isMatchedDonorUser && String(req.user?.role||'').toLowerCase() !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
+    if (isOwner || isMatchedDonorUser || viewerRole === 'admin') {
+      return res.json(mapped);
     }
-    return res.json(mapped);
+
+    // Sanitized donor view for BloodRequest mapping
+    if (viewerRole === 'donor') {
+      const sanitized = {
+        _id: mapped._id,
+        patientName: mapped.patientName,
+        bloodType: mapped.bloodType,
+        location: mapped.location,
+        units: mapped.units,
+        urgency: mapped.urgency,
+        status: mapped.status,
+        createdAt: mapped.createdAt,
+        updatedAt: mapped.updatedAt,
+        requester: mapped.requesterId ? { name: mapped.requesterId.name || 'Requester' } : undefined,
+        contactHidden: true,
+        viewer: 'donor',
+      };
+      return res.json(sanitized);
+    }
+
+    return res.status(403).json({ error: 'Forbidden' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -195,6 +348,9 @@ export const respondToRequest = async (req, res) => {
       .populate('requesterId', 'name email phone')
       .populate('contactedBy.donorId');
     if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (doc.status === 'Expired') {
+      return res.status(400).json({ success: false, message: 'Request has expired' });
+    }
     if (doc.status === 'Fulfilled') {
       return res.status(400).json({ success: false, message: 'Request already fulfilled' });
     }
@@ -291,6 +447,9 @@ export const markFulfilled = async (req, res) => {
       .populate('matchedDonorId', 'name email phone')
       .populate('contactedBy.donorId');
     if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (doc.status === 'Expired') {
+      return res.status(400).json({ success: false, message: 'Cannot fulfill an expired request' });
+    }
 
     // Authorization: requester, admin, or the matched donor can mark fulfilled
     let actingDonor = null;
@@ -303,7 +462,12 @@ export const markFulfilled = async (req, res) => {
           actingDonor = await Donor.findOne({ user: req.user.id });
         } catch (_) {}
         if (!actingDonor) {
-          return res.status(403).json({ success: false, message: 'Forbidden: not allowed to fulfill this request' });
+          // No Donor profile found. Allow fulfillment if this user is the matched donor.
+          if (doc.matchedDonorId && String(doc.matchedDonorId._id || doc.matchedDonorId) === String(req.user.id)) {
+            // proceed without actingDonor document; skip donor-specific cooldown later
+          } else {
+            return res.status(403).json({ success: false, message: 'Forbidden: not allowed to fulfill this request' });
+          }
         }
       }
 
@@ -526,9 +690,10 @@ export const listMatchesForMe = async (req, res) => {
 export const acceptDonation = async (req, res) => {
   try {
     const { id } = req.params;
-    // Find acting donor from current user
+    // Allow acceptance even if a Donor profile record doesn't exist.
+    // Many donors are legacy users matched by `matchedDonorId` (User._id).
+    // If a Donor document exists, great; otherwise proceed using the authenticated user.
     const actingDonor = await Donor.findOne({ user: req.user?.id }).select('_id user');
-    if (!actingDonor) return res.status(403).json({ success: false, message: 'Forbidden: donor profile not found' });
 
     const doc = await Request.findById(id).populate('requesterId', 'name email phone');
     if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
@@ -568,4 +733,64 @@ export const acceptDonation = async (req, res) => {
 export const completeDonation = async (req, res) => {
   // Reuse markFulfilled logic by delegating
   return markFulfilled(req, res);
+};
+
+// PATCH /api/requests/:id/decline - donor declines matched/accepted request
+export const declineDonation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const doc = await Request.findById(id).populate('requesterId', 'name email phone');
+    if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
+
+    const status = String(doc.status || 'Pending');
+    if (!['Matched', 'Accepted'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Request is not matched or accepted' });
+    }
+    // Only the matched donor can decline when set
+    if (doc.matchedDonorId && String(doc.matchedDonorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You are not the matched donor for this request' });
+    }
+
+    const prevMatchedUserId = doc.matchedDonorId ? String(doc.matchedDonorId) : null;
+
+    // Reset to pending and clear matched donor
+    doc.status = 'Pending';
+    doc.matchedDonorId = undefined;
+    await doc.save();
+
+    // Release donor reservation for both models
+    try {
+      await Donor.updateMany({ matchedRequest: id }, { $set: { matchedRequest: null, availabilityStatus: 'available' } });
+      if (prevMatchedUserId) {
+        await User.findByIdAndUpdate(prevMatchedUserId, { $set: { donorStatus: 'available', availability: true } });
+      }
+    } catch (e) { console.warn('Decline release error:', e?.message || e); }
+
+    // Notify requester that donor declined; system will try to rematch
+    try {
+      if (doc.requesterId) {
+        await Notification.create({
+          userId: typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId,
+          title: 'Donor Declined',
+          message: 'The matched donor declined. We are searching for another donor.',
+          type: 'request',
+          urgent: true,
+          meta: { requestId: doc._id, status: 'Pending', source: 'request' },
+        });
+      }
+    } catch (e) { console.error('Notify decline error:', e?.message || e); }
+
+    // Immediately attempt to rematch
+    try {
+      const { onRequestCreated } = await import('../services/realtimeMatcher.js');
+      onRequestCreated(doc).catch(()=>{});
+    } catch (_) {}
+
+    return res.json({ success: true, message: 'Request declined', data: doc });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };

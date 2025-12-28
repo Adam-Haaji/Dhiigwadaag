@@ -1,13 +1,13 @@
 import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  name: { type: String, required: true, trim: true, match: [/^[A-Za-z\s]+$/, 'Name must contain letters and spaces only'] },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email format'] },
   password: { type: String, required: true },
   // Optional profile fields (moved off of required to allow signup before choosing role)
   bloodType: { type: String },
   location: { type: String },
-  phone: { type: String },
+  phone: { type: String, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
 
   // Role system
   role: { type: String, enum: ['none', 'donor', 'requester', 'both', 'admin'], default: 'none', required: true },
@@ -31,5 +31,15 @@ const userSchema = new mongoose.Schema({
   expoPushTokens: { type: [String], default: [] },
 
 }, { timestamps: true });
+
+// Normalize inputs
+userSchema.pre('save', function(next) {
+  try {
+    if (typeof this.email === 'string') this.email = this.email.trim().toLowerCase();
+    if (typeof this.name === 'string') this.name = this.name.trim();
+    if (typeof this.phone === 'string') this.phone = this.phone.trim();
+    next();
+  } catch (e) { next(e); }
+});
 
 export default mongoose.model('User', userSchema);

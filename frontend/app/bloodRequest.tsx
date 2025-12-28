@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, ToastAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,7 +18,7 @@ export default function BloodRequest() {
     units: '',
     contactPerson: '',
     contactPhone: '',
-    urgentLevel: '' as '' | 'low'|'medium'|'high'|'critical',
+    urgencyLevel: '' as '' | 'critical'|'normal',
     reason: '',
     additionalNote: '',
   });
@@ -33,7 +33,7 @@ export default function BloodRequest() {
       'Wardhiigley (Warta Nabadda)', 'Yaqshid', 'Garasbaley', 'Kahda'
     ].map(v => ({ label: v, value: v }))
   ), []);
-  const urgentLevels = ['low','medium','high','critical'] as const;
+  const urgentLevels = ['critical','normal'] as const;
 
   const update = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -43,7 +43,7 @@ export default function BloodRequest() {
   };
 
   const validate = () => {
-    if (!form.patientName || !form.bloodGroup || !form.district || !form.contactPerson || !form.contactPhone || !form.urgentLevel || !form.reason) {
+    if (!form.patientName || !form.bloodGroup || !form.district || !form.contactPerson || !form.contactPhone || !form.urgencyLevel || !form.reason) {
       Alert.alert('Missing fields', 'Please fill in all required fields.');
       return false;
     }
@@ -52,8 +52,16 @@ export default function BloodRequest() {
       Alert.alert('Units required', 'Please enter units needed (minimum 1).');
       return false;
     }
-    if (!/^[0-9+\-()\s]{6,20}$/.test(form.contactPhone.trim())) {
-      Alert.alert('Invalid phone', 'Please enter a valid contact phone number.');
+    if (!/^\d{9,12}$/.test(form.contactPhone.trim())) {
+      Alert.alert('Invalid phone', 'Enter a valid phone number');
+      return false;
+    }
+    if (!/^[A-Za-z\s]+$/.test(form.patientName.trim())) {
+      Alert.alert('Invalid name', 'This field must contain letters only');
+      return false;
+    }
+    if (!/^[A-Za-z\s]+$/.test(form.contactPerson.trim())) {
+      Alert.alert('Invalid contact', 'This field must contain letters only');
       return false;
     }
     return true;
@@ -71,14 +79,14 @@ export default function BloodRequest() {
           await setUser({ token, user: updated });
         } catch {}
       }
-      const resp: any = await apiClient.createBloodRequest({
+      const resp: any = await apiClient.createPriorityRequest({
         patientName: form.patientName.trim(),
         bloodGroup: form.bloodGroup as any,
         district: form.district as any,
         units: Number(form.units),
         contactPerson: form.contactPerson.trim(),
         contactPhone: form.contactPhone.trim(),
-        urgentLevel: form.urgentLevel as any,
+        urgencyLevel: form.urgencyLevel as any,
         reason: form.reason.trim(),
         additionalNote: form.additionalNote ? form.additionalNote.trim() : undefined,
       });
@@ -176,14 +184,17 @@ export default function BloodRequest() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Urgent Level *</Text>
+          <Text style={styles.label}>Urgency Level (Required)</Text>
           <View style={styles.rowWrap}>
             {urgentLevels.map((u) => (
-              <TouchableOpacity key={u} style={[styles.chip, form.urgentLevel===u && styles.chipActive]} onPress={() => update('urgentLevel', u)}>
-                <Text style={[styles.chipText, form.urgentLevel===u && styles.chipTextActive]}>{u.charAt(0).toUpperCase()+u.slice(1)}</Text>
+              <TouchableOpacity key={u} style={[styles.chip, form.urgencyLevel===u && styles.chipActive]} onPress={() => update('urgencyLevel', u)}>
+                <Text style={[styles.chipText, form.urgencyLevel===u && styles.chipTextActive]}>{u === 'critical' ? 'Critical – Immediate need' : 'Normal – Can wait up to 24 hours'}</Text>
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
+            {`Critical: needs blood immediately  •  Normal: can wait up to 12–24 hours`}
+          </Text>
         </View>
 
         <View style={styles.section}>
@@ -243,6 +254,6 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#fff' },
   textArea: { height: 100, paddingTop: 16 },
   footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  submitButton: { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)', elevation: 4 },
+  submitButton: { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, shadowColor: '#E74C3C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
   submitButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginLeft: 8 },
 });

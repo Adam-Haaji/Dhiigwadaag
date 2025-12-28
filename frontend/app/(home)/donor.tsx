@@ -56,7 +56,17 @@ export default function DonorDashboard() {
   }, [donorStatus, unavailableUntil]);
 
   const handleRegister = () => router.push('/donorRegistration');
-  const handleViewMatches = () => router.push('/donorMatches');
+  const handleViewMatches = async () => {
+    try {
+      const matches: any[] = await api.listMyMatches();
+      if (Array.isArray(matches) && matches.length > 0) {
+        const topId = String(matches[0]._id);
+        router.push({ pathname: '/matchedRequestDetail', params: { id: topId, mode: 'donor' } });
+        return;
+      }
+    } catch {}
+    router.push({ pathname: '/(home)/notification', params: { openLatestRequest: '1' } });
+  };
   const handleSwitchToRequester = async () => {
     if (switching) return;
     setSwitching(true);

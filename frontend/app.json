@@ -1,31 +1,42 @@
 {
   "expo": {
     "name": "Blood Donation App",
-    "slug": "blood-donation-app-dev",
+  "slug": "blood-donation-app-dev",
     "version": "1.0.0",
-    "newArchEnabled": false,
+    "orientation": "portrait",
+    "scheme": "frontend",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "updates": {
       "enabled": false,
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_ERROR_RECOVERY"
     },
-    "experiments": {
-      "typedRoutes": false
-    },
-    "extra": {
-      "router": {},
-      "EXPO_PUBLIC_API_BASE_URL": "https://api-smart-blood.onrender.com",
-      "EXPO_PUBLIC_API_TIMEOUT_MS": 25000,
-      "eas": {
-        "projectId": "f9e3d7a9-8667-4cb1-aac3-5c742d631c2b"
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ]
       }
     },
     "android": {
-      "package": "com.adam_moha.blooddonationappdev"
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.blooddonation.dev"
     },
-    "assetBundlePatterns": [
-      "**/*",
-      "assets/image/android/*/*"
-    ]
+    
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE-WITH-YOUR-EAS-PROJECT-ID"
+      }
+    }
   }
 }

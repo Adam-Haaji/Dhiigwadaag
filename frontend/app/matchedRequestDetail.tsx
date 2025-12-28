@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -11,7 +11,7 @@ export default function MatchedRequestDetail() {
   const { id, mode } = useLocalSearchParams<{ id: string; mode?: 'donor'|'requester' }>();
   const { user } = useAuth();
   const [request, setRequest] = useState<any | null>(null);
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<'accept'|'complete'|null>(null);
   const [declining, setDeclining] = useState(false);
 
@@ -19,25 +19,29 @@ export default function MatchedRequestDetail() {
   const showAcceptButton = status === 'matched';
   const showIHaveDonatedButton = status === 'accepted';
 
-  const load = useCallback(async () => {
+  async function load() {
     if (!id) return;
     setLoading(true);
     try {
-      const res = mode === 'donor' ? await api.getDonorMatchView(String(id)) : await api.getRequest(String(id));
+      // Use unified request detail endpoint for both donor and requester views
+      const res = await api.getRequest(String(id));
       setRequest(res);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [id, mode]);
+  }
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [id]);
 
   const requester = request?.requester || request?.requesterId || {};
   const requesterName = requester?.name || requester?.email || 'Requester';
-  const isAccepted = status === 'accepted';
-  const requesterPhone = mode === 'donor' ? (isAccepted ? (requester?.phone || '—') : 'Hidden until you accept') : (requester?.phone || '—');
+  const isAccepted = status === 'accepted' || status === 'fulfilled';
+  const contactHidden = !!request?.contactHidden;
+  const requesterPhone = mode === 'donor'
+    ? (!contactHidden && isAccepted ? (requester?.phone || request?.contactPhone || '—') : 'Hidden until you accept')
+    : (requester?.phone || request?.contactPhone || '—');
   const bloodType = request?.bloodType || '—';
   const units = typeof request?.units !== 'undefined' ? String(request.units) : null;
   const location = request?.location || '—';
@@ -47,11 +51,9 @@ export default function MatchedRequestDetail() {
     if (!id) return;
     setActing('accept');
     try {
-      if (mode === 'donor') {
-        await api.acceptMatch(String(id));
-      } else {
-        await api.acceptDonation(String(id));
-      }
+      // Accepting a matched request is done via the Requests API
+      // The `id` here refers to the request ID, not a match ID
+      await api.acceptRequest(String(id));
       await load();
       Alert.alert('Accepted', 'You accepted this request. Please proceed to donate.');
     } catch (e: any) {
@@ -66,7 +68,8 @@ export default function MatchedRequestDetail() {
     setActing('complete');
     try {
       await api.completeDonation(String(id));
-      router.replace('/donorMatches');
+      await load();
+      Alert.alert('Thank you', 'Donation recorded successfully.');
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not complete');
     } finally {
@@ -82,11 +85,8 @@ export default function MatchedRequestDetail() {
         text: 'Decline', style: 'destructive', onPress: async () => {
           setDeclining(true);
           try {
-                if (mode === 'donor') {
-                  await api.declineMatch(String(id));
-                } else {
-                  await api.declineDonation(String(id));
-                }
+                // Decline always goes through Requests API
+                await api.declineDonation(String(id));
             await load();
             Alert.alert('Declined', 'You declined this request. We will try to rematch the requester.');
             router.replace('/donorMatches');
@@ -137,6 +137,20 @@ export default function MatchedRequestDetail() {
           <TouchableOpacity style={[styles.btn, styles.completeBtn]} disabled={acting==='complete'} onPress={onComplete}>
             <IconSymbol name="heart.fill" size={20} color="#fff" />
             <Text style={styles.btnText}>{acting==='complete' ? 'Submitting...' : 'I Have Donated'}</Text>
+          </TouchableOpacity>
+        )}
+        {mode === 'donor' && isAccepted && !contactHidden && (requester?.phone || request?.contactPhone) && (
+          <TouchableOpacity style={[styles.btn, styles.acceptBtn]} onPress={() => {
+            const phone = requester?.phone || request?.contactPhone;
+            if (phone) {
+              const tel = `tel:${String(phone)}`;
+              Linking.openURL(tel).catch(() => {
+                Alert.alert('Unable to open dialer', String(phone));
+              });
+            }
+          }}>
+            <IconSymbol name="phone.fill" size={20} color="#fff" />
+            <Text style={styles.btnText}>Call Requester</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

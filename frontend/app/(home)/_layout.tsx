@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { Tabs, Stack } from 'expo-router';
+import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
@@ -107,16 +108,31 @@ export default function TabLayout() {
     return allTabs.filter(t => ['index','profile'].includes(t.name));
   }, [role]);
 
-  // ✅ iOS navigation with stable Tabs
+  // ✅ iOS navigation
   if (Platform.OS === 'ios') {
     return (
-      <Tabs screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="index" options={{ title: 'Home' }} />
-        <Tabs.Screen name="donor" options={{ title: 'Donor' }} />
-        <Tabs.Screen name="request" options={{ title: 'Request' }} />
-        <Tabs.Screen name="notification" options={{ title: 'Notification' }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-      </Tabs>
+      <NativeTabs>
+        <NativeTabs.Trigger name="index"> {/* opens app/(home)/index.tsx */}
+          <Icon sf="house.fill" drawable="ic_home" />
+          <Label>Home</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="donor">
+          <Icon sf="heart.fill" drawable="ic_donor" />
+          <Label>Donor</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="request">
+          <Icon sf="person.2.fill" drawable="ic_request" />
+          <Label>Request</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="notification">
+          <Icon sf="bell.fill" drawable="ic_notification" />
+          <Label>Notification</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="profile">
+          <Icon sf="person.fill" drawable="ic_profile" />
+          <Label>Profile</Label>
+        </NativeTabs.Trigger>
+      </NativeTabs>
     );
   }
 

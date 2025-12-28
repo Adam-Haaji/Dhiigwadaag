@@ -359,8 +359,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    // Native shadows
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
+    // Web-only shadow
+    ...(Platform.select({ web: { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)' } }) as any),
   },
   tipIcon: {
     width: 34,

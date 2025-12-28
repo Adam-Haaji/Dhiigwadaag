@@ -92,62 +92,11 @@ export const createBloodRequest = async (req, res) => {
     } catch (notifyErr) {
       console.error('Broadcast notification error:', notifyErr?.message || notifyErr);
     }
-    // Auto-match an available donor: same blood type, available, within 50km if coords provided; else by district.
+    // Real-time auto matching
     try {
-      if (!doc.donorId) {
-        let donor = null;
-        if (Number.isFinite(lat) && Number.isFinite(lng)) {
-          // Prefer geospatial within 50km
-          try {
-            donor = await Donor.findOne({
-              bloodGroup: doc.bloodGroup,
-              availabilityStatus: 'available',
-              isActive: true,
-              location: {
-                $near: {
-                  $geometry: { type: 'Point', coordinates: [lng, lat] },
-                  $maxDistance: 50 * 1000,
-                },
-              },
-            });
-          } catch (_) {
-            // fall back to non-geo
-          }
-        }
-        if (!donor) {
-          donor = await Donor.findOne({ bloodGroup: doc.bloodGroup, district: doc.district, availabilityStatus: 'available', isActive: true });
-        }
-        if (donor) {
-          doc.status = 'matched';
-          doc.donorId = donor._id;
-          donor.matchedRequest = doc._id;
-          await donor.save();
-          await doc.save();
-          // Notify requester and donor
-          const notes = [];
-          notes.push({
-            userId: doc.requesterId,
-            title: 'Donor Matched',
-            message: `A donor has been found for ${doc.patientName} (${doc.bloodGroup}) in ${doc.district}.`,
-            type: 'request',
-            urgent: ['high','critical'].includes(String(doc.urgentLevel)),
-            meta: { source: 'blood-request', requestId: doc._id, status: 'matched', urgency: doc.urgentLevel },
-          });
-          if (donor.user) {
-            notes.push({
-              userId: donor.user,
-              title: 'You have been matched',
-              message: `You are matched to donate ${doc.bloodGroup} for ${doc.patientName} in ${doc.district}.`,
-              type: 'request',
-              urgent: ['high','critical'].includes(String(doc.urgentLevel)),
-              meta: { source: 'blood-request', requestId: doc._id, status: 'matched', urgency: doc.urgentLevel },
-            });
-          }
-          if (notes.length) await Notification.insertMany(notes);
-        }
-      }
+      const { onRequestCreated } = await import('../services/realtimeMatcher.js');
+      await onRequestCreated(doc);
     } catch (err) {
-      // Matching/notification failure shouldn't break request creation
       console.error('Auto-match error:', err?.message || err);
     }
     // Update requesting user's role -> requester/both

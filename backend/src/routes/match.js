@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/authMiddleware.js';
+import { backfillPending } from '../services/realtimeMatcher.js';
 import Donor from '../models/Donor.js';
 import Request from '../models/Request.js';
 import BloodRequest from '../models/BloodRequest.js';
@@ -83,6 +84,7 @@ router.post('/request', authMiddleware, async (req, res) => {
     let top = [];
     let searchedBloodGroups = [];
 
+    let sortedCandidates = [];
     for (let i = 0; i < tiers.length; i++) {
       const tierBloods = tiers[i];
       searchedBloodGroups = tierBloods; // last attempted
@@ -130,6 +132,7 @@ router.post('/request', authMiddleware, async (req, res) => {
         return { donor: d, distanceKm: dist };
       });
       const sorted = withDistance.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+      sortedCandidates = sorted;
       top = sorted.slice(0, Math.min(sorted.length, 3));
       chosenTierIndex = i;
       break; // stop at first non-empty tier
@@ -193,7 +196,7 @@ router.post('/request', authMiddleware, async (req, res) => {
     });
 
     // Include a broader list so the requester can see other nearby donors if needed
-    const nearby_candidates = sorted.slice(0, Math.min(sorted.length, 20)).map(({ donor, distanceKm }) => ({
+    const nearby_candidates = (sortedCandidates || []).slice(0, Math.min(sortedCandidates.length, 20)).map(({ donor, distanceKm }) => ({
       donor_id: String(donor._id),
       donor_name: donor.fullName,
       blood_type: donor.bloodGroup,
@@ -219,3 +222,15 @@ router.post('/request', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
+// Admin/maintenance: backfill matches for existing pending requests
+// POST /api/match/backfill  -> { matched: number }
+router.post('/backfill', authMiddleware, async (req, res) => {
+  try {
+    const limit = Number(req.body?.limit || 200);
+    const result = await backfillPending({ limit });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e?.message || 'failed' });
+  }
+});

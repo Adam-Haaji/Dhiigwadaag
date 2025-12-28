@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import 'react-native-gesture-handler';
+import { useEffect } from 'react';
 import { Platform, LogBox, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { AuthProvider } from '../context/AuthContext';

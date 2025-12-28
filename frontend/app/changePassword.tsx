@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -154,24 +155,24 @@ const COLORS = {
   cardBorder: '#EEF2F6',
 };
 
-const styles = {
+const styles = StyleSheet.create({
   root: {
-    flex: 1 as const,
+    flex: 1,
     backgroundColor: COLORS.white,
   },
   appBar: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingTop: Platform.OS === 'android' ? 8 : 0,
     height: 56,
     backgroundColor: COLORS.white,
   },
   header: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
@@ -179,8 +180,8 @@ const styles = {
     backgroundColor: COLORS.white,
   },
   backBtn: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
     backgroundColor: '#FDECEA',
     paddingHorizontal: 12,
@@ -188,12 +189,12 @@ const styles = {
     borderRadius: 12,
     marginTop: 40
   },
-  headerTitle: { fontSize: 20, fontWeight: '800' as const, color: '#111827' },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
   appBarLeading: {
-    position: 'absolute' as const,
+    position: 'absolute',
     left: 8,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -204,12 +205,12 @@ const styles = {
     marginRight: 2,
   },
   backText: {
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: COLORS.black,
   },
   title: {
     fontSize: 20,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: COLORS.black,
   },
 
@@ -222,9 +223,9 @@ const styles = {
   spacer24: { height: 24 },
 
   subtitle: {
-    textAlign: 'center' as const,
+    textAlign: 'center',
     color: COLORS.caption,
-    fontWeight: '900' as const,
+    fontWeight: '900',
     fontSize: 16,
   },
 
@@ -246,7 +247,7 @@ const styles = {
 
   label: {
     color: COLORS.label,
-    fontWeight: '900' as const,
+    fontWeight: '900',
     fontSize: 16,
     marginBottom: 8,
   },
@@ -257,7 +258,7 @@ const styles = {
     paddingHorizontal: 20,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: COLORS.black,
   },
 
@@ -265,7 +266,7 @@ const styles = {
     marginTop: 6,
     color: '#D32F2F',
     fontSize: 12,
-    fontWeight: '700' as const,
+    fontWeight: '700',
   },
 
   fieldGap: { height: 18 },
@@ -275,17 +276,17 @@ const styles = {
     backgroundColor: COLORS.red,
     height: 56,
     borderRadius: 16,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveText: {
     color: COLORS.white,
     fontSize: 18,
-    fontWeight: '800' as const,
+    fontWeight: '800',
   },
 
   showHideBtn: {
-    position: 'absolute' as const,
+    position: 'absolute',
     right: 12,
     top: Platform.OS === 'ios' ? 10 : 6,
     paddingHorizontal: 8,
@@ -293,6 +294,6 @@ const styles = {
   },
   showHideText: {
     color: COLORS.muted,
-    fontWeight: '800' as const,
+    fontWeight: '800',
   },
-} as const;
+});

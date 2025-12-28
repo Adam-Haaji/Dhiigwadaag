@@ -1,7 +1,6 @@
 // Simple API client with token storage and helpers
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import API_URL from '@/config/api';
 
 type Json = Record<string, any> | undefined;
 
@@ -51,8 +50,12 @@ function detectHostIp(): string | null {
 }
 
 const HOST_IP = detectHostIp();
-// Centralized production base URL (Render)
-const DEFAULT_BASE = API_URL;
+// Choose sensible defaults:
+// - Android emulator: always prefer 10.0.2.2 (maps to host machine)
+// - iOS simulator: prefer detected LAN IP, else localhost
+const DEFAULT_BASE = Platform.OS === 'android'
+  ? 'http://10.0.2.2:5000'
+  : (HOST_IP ? `http://${HOST_IP}:5000` : 'http://localhost:5000');
 // Read runtime config:
 // 1) Prefer EXPO_PUBLIC_* from process.env when present
 // 2) Fallback to expo config extras (app.json -> expo.extra)
@@ -64,10 +67,10 @@ const envTimeout = (typeof process !== 'undefined' && (process as any)?.env?.EXP
   ? (process as any).env.EXPO_PUBLIC_API_TIMEOUT_MS
   : extras.EXPO_PUBLIC_API_TIMEOUT_MS;
 
-// Force using centralized API URL for production builds
-const BASE_URL = DEFAULT_BASE;
+const BASE_URL = envBase || DEFAULT_BASE;
 const RAW_TIMEOUT = envTimeout;
-const REQUEST_TIMEOUT_MS = RAW_TIMEOUT !== undefined ? Number(RAW_TIMEOUT) : 10000;
+// Increase default timeout to better handle slow mobile networks
+const REQUEST_TIMEOUT_MS = RAW_TIMEOUT !== undefined ? Number(RAW_TIMEOUT) : 20000;
 const USE_TIMEOUT = Number.isFinite(REQUEST_TIMEOUT_MS) && REQUEST_TIMEOUT_MS > 0;
 const TOKEN_KEY = '@token';
 
@@ -75,8 +78,7 @@ async function getToken() { return AsyncStorage.getItem(TOKEN_KEY); }
 async function setToken(t: string) { return AsyncStorage.setItem(TOKEN_KEY, t); }
 async function clearToken() { return AsyncStorage.removeItem(TOKEN_KEY); }
 
-// Use the centralized API URL immediately; avoid pinging or local fallbacks
-let RESOLVED_BASE: string | null = API_URL;
+let RESOLVED_BASE: string | null = null;
 let resolvingBasePromise: Promise<string> | null = null;
 
 async function pingBase(base: string, timeoutMs = 1500): Promise<boolean> {
@@ -100,12 +102,18 @@ async function resolveBaseUrl(): Promise<string> {
   const extras: any = (Constants as any)?.expoConfig?.extra || {};
   const extraBase = extras.EXPO_PUBLIC_API_BASE_URL as string | undefined;
   const candidatesRaw: (string | undefined)[] = [];
-  // Always prioritize centralized API URL
-  candidatesRaw.push(API_URL);
-  // Allow explicit env/expo config as secondary (for dev only)
-  if (envBase && envBase !== API_URL) candidatesRaw.push(envBase);
-  if (extraBase && extraBase !== API_URL && extraBase !== envBase) candidatesRaw.push(extraBase);
-  // Final fallback
+  // Prioritize explicit env/expo config first
+  if (envBase) candidatesRaw.push(envBase);
+  if (extraBase && extraBase !== envBase) candidatesRaw.push(extraBase);
+  if (Platform.OS === 'android') {
+    candidatesRaw.push('http://10.0.2.2:5000');
+    candidatesRaw.push('http://localhost:5000'); // works with `adb reverse`
+    if (HOST_IP) candidatesRaw.push(`http://${HOST_IP}:5000`);
+  } else {
+    if (HOST_IP) candidatesRaw.push(`http://${HOST_IP}:5000`);
+    candidatesRaw.push('http://localhost:5000');
+  }
+  // Always fall back to computed default as last resort
   candidatesRaw.push(DEFAULT_BASE);
   const candidates = unique(candidatesRaw);
 
@@ -168,8 +176,13 @@ async function request(method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path: string
     }
     const msg = (e?.message || '').toLowerCase();
     if (msg.includes('network request failed') || msg.includes('failed to fetch')) {
-      if (__DEV__) console.warn('[API] Network unreachable', { baseUrl: base });
-      throw new Error('Network error. Please check your connection.');
+      if (__DEV__) {
+        const platformTip = Platform.OS === 'android'
+          ? 'Android emulator: use 10.0.2.2:5000; real device: set EXPO_PUBLIC_API_BASE_URL to your PC LAN IP and allow Windows Firewall'
+          : 'iOS simulator: localhost works only on same Mac; real iPhone: set EXPO_PUBLIC_API_BASE_URL to your Mac LAN IP';
+        console.warn('[API] Network unreachable', { baseUrl: base, tip: platformTip });
+      }
+      throw new Error('Cannot reach server. Check API base and network.');
     }
     throw e;
   } finally {
@@ -180,6 +193,7 @@ async function request(method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path: string
 export const api = {
   setToken,
   clearToken,
+  get: (path: string) => request('GET', path),
   // auth
   signup: (data: { name: string; email: string; password: string; bloodType: string; role: 'Donor'|'Requester'; location: string; phone: string; }) => request('POST', '/api/auth/signup', data),
   login: async (data: { email: string; password: string; }) => {
@@ -187,11 +201,10 @@ export const api = {
     if (result?.token) await setToken(result.token);
     return result;
   },
-  changePassword: (oldPassword: string, newPassword: string) => request('POST', '/api/auth/change', { oldPassword, newPassword }),
   // users
   me: () => request('GET', '/api/users/me'),
   updateMe: (data: Json) => request('PUT', '/api/users/me', data),
-  switchRole: async (newRole: 'donor'|'requester') => request('POST', '/api/user/switch-role', { newRole }),
+  switchRole: async (newRole: 'donor'|'requester'|'both') => request('POST', '/api/users/switch-role', { newRole }),
   health: () => request('GET', '/api/health'),
   // donors
   // Legacy (User-profile-based) register; kept for backward compatibility in case older screens use it.
@@ -222,11 +235,23 @@ export const api = {
     units: number;
     contactPerson: string;
     contactPhone: string;
-    urgentLevel: 'low'|'medium'|'high'|'critical';
+    urgencyLevel: 'critical'|'normal';
     reason: string;
     additionalNote?: string;
     donorId?: string;
   }) => request('POST', '/api/blood-requests', data),
+  // Priority-based create (runs matching immediately)
+  createPriorityRequest: (data: {
+    patientName: string;
+    bloodGroup: 'A+'|'A-'|'B+'|'B-'|'AB+'|'AB-'|'O+'|'O-';
+    district: string;
+    units?: number;
+    contactPerson: string;
+    contactPhone: string;
+    urgencyLevel: 'critical'|'normal';
+    reason: string;
+    additionalNote?: string;
+  }) => request('POST', '/api/request/create', data),
   getBloodRequest: (id: string) => request('GET', `/api/blood-requests/${id}`),
   updateBloodRequestStatus: (id: string, status: 'pending'|'matched'|'accepted'|'donated'|'completed'|'cancelled') => request('PUT', `/api/blood-requests/${id}/status`, { status }),
   donorConfirmDonation: (id: string, donorId?: string) => request('PUT', `/api/blood-requests/${id}/donor-confirm`, donorId ? { donorId } : undefined),
@@ -262,7 +287,7 @@ export const api = {
   donorsMeta: () => request('GET', '/api/donors/meta'),
   getDonorProfile: (id: string) => request('GET', `/api/donors/${encodeURIComponent(id)}`),
   // requests
-  createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Urgent'|'Critical'; }) => request('POST', '/api/requests', data),
+  createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; }) => request('POST', '/api/requests', data),
   listRequests: () => request('GET', '/api/requests'),
   listMyMatches: () => request('GET', '/api/requests/matches/me'),
   getRequest: (id: string) => request('GET', `/api/requests/${id}`),
@@ -277,6 +302,7 @@ export const api = {
   cancelRequest: (id: string) => request('PUT', `/api/requests/${id}/cancel`),
   deleteRequest: (id: string) => request('DELETE', `/api/requests/${id}`),
   emergency: (data: { bloodType?: string; location?: string; message?: string }) => request('POST', '/api/requests/emergency', data),
+  emergencyCreate: (data: { bloodType: string; location: string; hospitalName?: string; phone: string; units?: number; reason?: string }) => request('POST', '/api/requests/emergency/create', data),
   // notifications
   myNotifications: () => request('GET', '/api/notifications'),
   markAllRead: () => request('POST', '/api/notifications/mark-all-read'),
@@ -287,6 +313,10 @@ export const api = {
   getDonorMatchView: (id: string) => request('GET', `/api/matches/${id}/donor-view`),
   acceptMatch: (id: string) => request('PATCH', `/api/matches/${id}/accept`),
   declineMatch: (id: string) => request('PATCH', `/api/matches/${id}/decline`),
+  // Priority flow endpoints
+  acceptRequest: (id: string) => request('PATCH', `/api/requests/${id}/accept`),
+  markDonated: (id: string) => request('POST', `/api/donor/donated/${id}`),
+  emergencyDonors: () => request('GET', `/api/requests/emergency-donors`),
   // Smart matching route
   matchRequest: (data: { requestId?: string; bloodType?: string; bloodGroup?: string; district?: string; location?: string; urgency?: 'Normal'|'Urgent'|'Critical'|string; urgentLevel?: string; lat?: number; lng?: number; }) => request('POST', '/api/match/request', data),
   // New strict compatibility endpoints

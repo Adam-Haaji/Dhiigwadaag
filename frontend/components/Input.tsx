@@ -20,9 +20,9 @@ export default function Input({ label, error, helperText, style, multiline = fal
       <TextInput
         style={[
           styles.input,
-          multiline && { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.sm },
-          focused && styles.inputFocused,
-          error && styles.inputError,
+          multiline ? { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.sm } : undefined,
+          focused ? styles.inputFocused : undefined,
+          error ? styles.inputError : undefined,
           style,
         ]}
         placeholderTextColor={semanticColors.textMuted}
@@ -32,7 +32,7 @@ export default function Input({ label, error, helperText, style, multiline = fal
         {...rest}
       />
       {(helperText || error) && (
-        <Text style={[styles.helper, error && styles.helperError]}>
+        <Text style={[styles.helper, error ? styles.helperError : undefined]}>
           {error ? error : helperText}
         </Text>
       )}

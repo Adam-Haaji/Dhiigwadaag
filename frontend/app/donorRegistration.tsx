@@ -7,6 +7,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import api from "../service/api";
 import useAuth from "@/hooks/useAuth";
 import SelectField from '../components/SelectField';
+import { LOCATION_OPTIONS } from '@/constants/locations';
 // Note: Native date picker is optional; we'll lazy-require it to avoid build errors when offline
 
 export default function DonorRegistration() {
@@ -37,32 +38,14 @@ export default function DonorRegistration() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  const phoneRegex = useMemo(() => /^\+?[0-9\s\-()]{7,20}$/, []);
+  const phoneRegex = useMemo(() => /^\d{9,12}$/, []);
+  const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
+  const nameRegex = useMemo(() => /^[A-Za-z\s]+$/, []);
 
   const bloodTypeOptions = useMemo(() => (
     ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ label: v, value: v }))
   ), []);
-  const districtOptions = useMemo(() => (
-    [
-      'Abdiaziz',
-      'Bondhere',
-      'Daynile',
-      'Dharkenley',
-      'Hamar Jajab',
-      'Hamar Weyne',
-      'Hodan',
-      'Howlwadaag',
-      'Kaaran',
-      'Shangani',
-      'Shibis',
-      'Wadajir (Medina)',
-      'Waberi',
-      'Warta Nabadda',
-      'Yaqshid',
-      'Garasbaley',
-      'Kaxda',
-    ].map(v => ({ label: v, value: v }))
-  ), []);
+  const districtOptions = useMemo(() => LOCATION_OPTIONS, []);
   const totalSteps = 1;
 
 
@@ -157,7 +140,9 @@ export default function DonorRegistration() {
     else if (formData.gender === 'Female' && hbNum < 12) errs.hb = 'HB-gaagu waa hooseeya (dumar)';
     if (!formData.bloodGroup) errs.bloodGroup = 'Blood type required';
     if (!formData.district) errs.district = 'Location required';
-    if (!phoneRegex.test(formData.phone.trim())) errs.phone = 'Invalid phone';
+    if (!phoneRegex.test(formData.phone.trim())) errs.phone = 'Enter a valid phone number';
+    if (!emailRegex.test(formData.email.trim())) errs.email = 'Please enter a valid email address (example@gmail.com)';
+    if (!nameRegex.test(formData.fullName.trim())) errs.fullName = 'This field must contain letters only';
     // Cooldown (use existing user lastDonationDate if present)
     const last = user?.user?.lastDonationDate ? new Date(user.user.lastDonationDate) : null;
     if (last && !isNaN(last.getTime())) {
@@ -270,6 +255,7 @@ export default function DonorRegistration() {
             onFocus={() => setFocusedField('fullName')}
             onBlur={() => setFocusedField('')}
           />
+          {validationErrors.fullName && <Text style={styles.errorText}>{validationErrors.fullName}</Text>}
 
           <TextInput
             style={[commonStyles.input, focusedField === 'email' && commonStyles.inputFocused]}
@@ -281,6 +267,7 @@ export default function DonorRegistration() {
             onBlur={() => setFocusedField('')}
             keyboardType="email-address"
           />
+          {validationErrors.email && <Text style={styles.errorText}>{validationErrors.email}</Text>}
 
           <View style={styles.inputGroup}>
             <SelectField
@@ -314,7 +301,7 @@ export default function DonorRegistration() {
             onBlur={() => setFocusedField('')}
             keyboardType="phone-pad"
           />
-
+          {validationErrors.phone && <Text style={styles.errorText}>{validationErrors.phone}</Text>}
           <View style={styles.inputGroup}>
             <SelectField
               label="Gender"

@@ -9,6 +9,25 @@ export const getProfile = async (req, res) => {
   }
 };
 
+export const switchRole = async (req, res) => {
+  try {
+    const { newRole } = req.body;
+    const allowed = ['donor', 'requester', 'both'];
+    if (!allowed.includes(String(newRole).toLowerCase())) {
+      return res.status(400).json({ error: 'invalid_role' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { role: String(newRole).toLowerCase() },
+      { new: true }
+    ).select('-password');
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.user.id, req.body, { new: true });

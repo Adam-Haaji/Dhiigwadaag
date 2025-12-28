@@ -7,6 +7,7 @@ type CTA = {
   icon: IconSymbolName;
   bg?: string;
   onPress?: () => void;
+  label?: string;
 };
 
 export default function HeroCard({
@@ -28,14 +29,16 @@ export default function HeroCard({
       {ctas?.length ? (
         <View style={s.ctaRow}>
           {ctas.map((c, i) => (
-            <TouchableOpacity
-              key={String(i)}
-              onPress={c.onPress}
-              activeOpacity={0.85}
-              style={[s.cta, { backgroundColor: c.bg || '#3498DB' }]}
-            >
-              <IconSymbol name={c.icon} size={26} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View key={String(i)} style={{ alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={c.onPress}
+                activeOpacity={0.85}
+                style={[s.cta, { backgroundColor: c.bg || '#3498DB' }]}
+              >
+                <IconSymbol name={c.icon} size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+              {!!c.label && <Text style={s.ctaLabel}>{c.label}</Text>}
+            </View>
           ))}
         </View>
       ) : null}
@@ -89,5 +92,12 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  ctaLabel: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+    opacity: 0.95,
   },
 });

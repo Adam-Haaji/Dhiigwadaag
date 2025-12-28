@@ -8,19 +8,19 @@ const districts = [
 ];
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-const urgentLevels = ['low', 'medium', 'high', 'critical'];
-const statuses = ['pending', 'matched', 'accepted', 'donated', 'completed', 'cancelled'];
+const urgentLevels = ['critical', 'normal'];
+const statuses = ['pending', 'matched', 'accepted', 'fulfilled', 'completed', 'cancelled'];
 
 const bloodRequestSchema = new mongoose.Schema(
   {
-    patientName: { type: String, required: true, trim: true },
+    patientName: { type: String, required: true, trim: true, match: [/^[A-Za-z\s]+$/, 'Patient name must contain letters and spaces only'] },
     bloodGroup: { type: String, enum: bloodGroups, required: true },
     district: { type: String, enum: districts, required: true },
     // Units of blood requested (bags)
     units: { type: Number, min: 1, default: 1 },
-    contactPerson: { type: String, required: true, trim: true },
-    contactPhone: { type: String, required: true, trim: true },
-    urgentLevel: { type: String, enum: urgentLevels, required: true },
+    contactPerson: { type: String, required: true, trim: true, match: [/^[A-Za-z\s]+$/, 'Contact person must contain letters and spaces only'] },
+    contactPhone: { type: String, required: true, trim: true, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
+    urgencyLevel: { type: String, enum: urgentLevels, required: true },
     reason: { type: String, required: true, trim: true },
     additionalNote: { type: String, default: '' },
     // Status flow per spec

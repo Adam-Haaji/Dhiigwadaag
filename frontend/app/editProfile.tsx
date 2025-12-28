@@ -12,6 +12,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LOCATION_OPTIONS } from '../constants/locations';
 
 
 
@@ -23,6 +24,7 @@ export default function EditProfileScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [blood, setBlood] = useState<string | null>(null);
+  const [location, setLocation] = useState<string | null>(null);
 
   const [errors, setErrors] = useState<{ [k: string]: string | undefined }>({});
 
@@ -40,6 +42,7 @@ export default function EditProfileScreen() {
     if (!digits) next.phone = 'Please enter phone number';
     else if (digits.length < 7) next.phone = 'Enter a valid phone number';
     if (!blood) next.blood = 'Please select a blood type';
+    if (!location) next.location = 'Please select your district';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -80,6 +83,34 @@ export default function EditProfileScreen() {
           {!!errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
           <View style={styles.fieldGap} />
+
+          {/* Location */}
+          <Text style={styles.label}>
+            District <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <View style={styles.pickerWrapper}>
+            <View style={styles.pickerRow}>
+              <Picker
+                selectedValue={location}
+                onValueChange={(v: string | null) => setLocation(v)}
+                style={styles.picker}
+                dropdownIconColor={COLORS.labelMuted}
+                prompt="Select district"
+              >
+                <Picker.Item
+                  enabled={false}
+                  label="Select district"
+                  value={null as any}
+                  color={COLORS.fieldHint}
+                />
+                {LOCATION_OPTIONS.map((opt) => (
+                  <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+                ))}
+              </Picker>
+              <Text style={styles.caret}>▾</Text>
+            </View>
+          </View>
+          {!!errors.location && <Text style={styles.errorText}>{errors.location}</Text>}
 
           {/* Email */}
           <Text style={styles.label}>Email</Text>

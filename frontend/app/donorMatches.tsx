@@ -1,69 +1,68 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import api from '@/service/api';
 import { router } from 'expo-router';
 
+type Match = { _id: string; bloodType: string; requester?: { name?: string }; location?: string; urgency?: string; requestType?: 'emergency'|'normal'; expiresAt?: string; status?: string; timeLeft?: number | null };
+
 export default function DonorMatches() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<Match[]>([]);
+  useEffect(() => { (async () => {
+    try { const res = await api.listMyMatches(); setItems(Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : [])); } catch {}
+  })(); }, []);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await api.listMyMatches();
-      setItems(Array.isArray(res) ? res : []);
-    } catch (e) {
-      // no-op
-    } finally {
-      setLoading(false);
-    }
-  };
+  const now = Date.now();
+  const enriched = useMemo(() => items.map(i => ({
+    ...i,
+    timeLeft: i.expiresAt ? Math.max(0, new Date(i.expiresAt).getTime() - now) : null,
+  })), [items, now]);
+  const emergency = enriched.filter(i => String(i.requestType||'').toLowerCase() === 'emergency' && String(i.status||'').toLowerCase() !== 'expired');
+  const normal = enriched.filter(i => (String(i.requestType||'').toLowerCase() !== 'emergency') && String(i.status||'').toLowerCase() !== 'expired');
 
-  useEffect(() => { load(); }, []);
+  const openDetail = (m: Match) => router.push({ pathname: '/matchedRequestDetail', params: { id: m._id, mode: 'donor' } });
+
+  const renderCard = (m: Match, isEmergency: boolean) => (
+    <TouchableOpacity key={m._id} style={[s.card, isEmergency ? s.emergency : null]} onPress={() => openDetail(m)}>
+      <View style={s.rowBetween}>
+        <Text style={s.title}>{isEmergency ? 'Emergency Request' : 'Matched Request'}</Text>
+        {isEmergency ? <View style={s.badgeCritical}><Text style={s.badgeTxt}>CRITICAL</Text></View> : null}
+      </View>
+      <Text style={s.line}>Blood Type: {m.bloodType || '—'}</Text>
+      <Text style={s.line}>Requester: {m.requester?.name || 'Requester'}</Text>
+      <Text style={s.line}>Location: {m.location || '—'}</Text>
+      <Text style={s.line}>Urgency: {m.urgency || (isEmergency ? 'Critical' : 'Normal')}</Text>
+      {m.timeLeft !== null && m.timeLeft !== undefined ? <Text style={s.line}>Time Left: {formatTime(m.timeLeft as number)}</Text> : null}
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={s.container}>
-      <ScrollView contentContainerStyle={s.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
-        <Text style={s.header}>Matched Requests</Text>
-        {items.length === 0 && (
-          <View style={s.emptyBox}>
-            <IconSymbol name="bell" size={20} color={colors.textSecondary} />
-            <Text style={s.emptyTxt}>No matches yet. We’ll notify you when matched.</Text>
-          </View>
-        )}
-        {items.map((it) => (
-          <TouchableOpacity key={String(it._id)} style={s.card} onPress={() => router.push({ pathname: '/matchedRequestDetail', params: { id: String(it._id) } })}>
-            <View style={s.rowBetween}>
-              <View style={s.rowCenter}>
-                <View style={s.btBadge}><Text style={s.btTxt}>{String(it.bloodType).toUpperCase()}</Text></View>
-                <Text style={s.title}>Blood Request</Text>
-              </View>
-              {it.matchedTier && <Text style={s.tier}>{it.matchedTier}</Text>}
-            </View>
-            <Text style={s.meta}>Location: {it.location || '—'}</Text>
-            <Text style={s.meta}>Status: {it.status}</Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView contentContainerStyle={s.content}>
+        <Text style={s.sectionTitle}>🚨 Emergency Requests ({emergency.length})</Text>
+        {emergency.map(m => renderCard(m, true))}
+        <Text style={s.sectionTitle}>🩸 Normal Requests ({normal.length})</Text>
+        {normal.map(m => renderCard(m, false))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function formatTime(ms: number) {
+  const m = Math.floor(ms / 60000); const h = Math.floor(m / 60); const mm = m % 60;
+  return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+}
+
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16 },
-  header: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 12 },
-  emptyBox: { backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-  emptyTxt: { marginTop: 8, color: colors.textSecondary },
-  card: { backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
+  sectionTitle: { color: colors.text, fontWeight: '800', marginBottom: 8 },
+  card: { backgroundColor: colors.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
+  emergency: { borderColor: colors.error, backgroundColor: '#FFF5F5' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowCenter: { flexDirection: 'row', alignItems: 'center' },
-  btBadge: { backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, marginRight: 10 },
-  btTxt: { color: '#fff', fontWeight: '800' },
-  title: { fontWeight: '700', color: colors.text },
-  tier: { color: colors.accent, fontWeight: '700' },
-  meta: { color: colors.textSecondary, marginTop: 4 },
+  title: { color: colors.text, fontWeight: '800' },
+  line: { color: colors.textSecondary, marginTop: 6 },
+  badgeCritical: { backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  badgeTxt: { color: '#fff', fontWeight: '700' },
 });

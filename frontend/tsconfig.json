@@ -6,6 +6,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "react-native",
+    "module": "esnext",
     "moduleResolution": "bundler",
     "allowJs": true,
     "target": "ES2022",
@@ -17,11 +18,7 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "types": [
-      "react",
-      "react-native",
-      "expo"
-    ],
+    "isolatedModules": true,
     "paths": {
       "@/*": [
         "./*"
@@ -31,8 +28,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

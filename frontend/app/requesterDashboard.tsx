@@ -12,7 +12,6 @@ export default function RequesterDashboard() {
   const role = String(user?.user?.role || '').toLowerCase();
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
-  const [matches, setMatches] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
 
   useEffect(() => {
@@ -23,11 +22,6 @@ export default function RequesterDashboard() {
         const p = list.filter((r: any) => String(r.status).toLowerCase() === 'fulfilled' || String(r.status).toLowerCase() === 'cancelled');
         setActive(a);
         setPast(p);
-      } catch {}
-      try {
-        // Matched donors for requester
-        const m = await api.matchRequest({});
-        if (Array.isArray(m?.matches)) setMatches(m.matches);
       } catch {}
       try {
         const n = await api.myNotifications();
@@ -45,11 +39,11 @@ export default function RequesterDashboard() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Hero (top rectangle styled like image 1) */}
         <HeroCard
-          title="Choose Your Path"
-          subtitle="Donate blood or request help"
+          title="Emergency Alert"
+          subtitle="Critical situation — immediate action"
           ctas={[
-            { icon: 'heart.fill', bg: '#2B79F7', onPress: () => router.push('/createRequest') },
-            { icon: 'person.2.fill', bg: '#F59E0B', onPress: () => router.push('/searchDonor') },
+            { icon: 'exclamationmark.triangle.fill', bg: '#EF4444', label: 'Search', onPress: () => router.push('/emergencyRequest') },
+            { icon: 'phone.fill', bg: '#F59E0B', label: 'Emergency Call', onPress: () => router.push('/emergencyRequest') },
           ]}
         />
 
@@ -81,16 +75,7 @@ export default function RequesterDashboard() {
           )) : <Text style={s.empty}>No active requests.</Text>}
         </View>
 
-        {/* Matched Donors */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Matched Donors</Text>
-          {matches?.length ? matches.slice(0,5).map((d: any, i: number) => (
-            <View style={s.listItem} key={String(d._id || i)}>
-              <Text style={s.itemTitle}>{d.name || d.fullName || 'Donor'}</Text>
-              <Text style={s.itemMeta}>{d.bloodType || d.bloodGroup}</Text>
-            </View>
-          )) : <Text style={s.empty}>No matches yet.</Text>}
-        </View>
+        {/* Matched Donors section removed per request */}
 
         {/* Notifications */}
         <View style={s.card}>

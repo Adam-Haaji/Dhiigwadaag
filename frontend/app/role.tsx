@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { colors } from '@/styles/commonStyles';
+import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
@@ -20,7 +20,8 @@ export default function RoleSelect() {
       await setUser({ token, user: updated });
       router.replace(newRole === 'donor' ? '/(home)/donor' : '/(home)/request');
     } catch (e) {
-      // minimal UX; could add toast later
+      // If backend role switch fails, still navigate so the user can proceed
+      router.replace(newRole === 'donor' ? '/(home)/donor' : '/(home)/request');
     } finally {
       setLoading(null);
     }

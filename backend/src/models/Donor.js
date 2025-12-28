@@ -23,27 +23,27 @@ const donorSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
 
-    fullName: { type: String, required: true, trim: true },
+    fullName: { type: String, required: true, trim: true, match: [/^[A-Za-z\s]+$/, 'Full name must contain letters and spaces only'] },
     dateOfBirth: { type: Date, required: true },
     gender: { type: String, enum: ['male', 'female'], required: true },
-    phone: { type: String, required: true, trim: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
+    phone: { type: String, required: true, trim: true, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
+    email: { type: String, required: true, lowercase: true, trim: true, match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email format'] },
     district: { type: String, enum: districts, required: true },
     bloodGroup: { type: String, enum: bloodGroups, required: true },
-    weightKg: { type: Number, required: true, min: 0 },
+    weightKg: { type: Number, required: true, min: 50 },
     consentGiven: { type: Boolean, required: true },
 
     emergencyContact: {
-      name: { type: String, required: true, trim: true },
+      name: { type: String, required: true, trim: true, match: [/^[A-Za-z\s]+$/, 'Name must contain letters and spaces only'] },
       relationship: { type: String, required: true, trim: true },
-      phone: { type: String, required: true, trim: true },
+      phone: { type: String, required: true, trim: true, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
     },
 
     lastDonationDate: { type: Date, required: true },
     availabilityStatus: { type: String, enum: ['available', 'unavailable'], default: 'available', required: true },
     // Derived/operational fields
     isActive: { type: Boolean, default: true }, // false if donated within last 3 months
-    age: { type: Number }, // convenience cache (computed from dateOfBirth)
+    age: { type: Number, min: 18, max: 65 }, // computed from dateOfBirth, but validate bounds
     nextAvailableDate: { type: Date },
     // Optional coordinates for proximity filtering (legacy fields)
     coordinates: {
@@ -89,6 +89,20 @@ donorSchema.pre('save', function(next) {
       const active = nextAvail.getTime() <= now.getTime();
       this.isActive = active;
       if (!active) this.availabilityStatus = 'unavailable';
+    }
+    // Validate HB by gender
+    if (typeof this.hb === 'number' && this.gender) {
+      const minHb = this.gender === 'male' ? 13.0 : 12.0;
+      if (this.hb < minHb) {
+        return next(new Error('Hemoglobin level is too low to donate'));
+      }
+    }
+    // Enforce weight and age eligibility
+    if (typeof this.weightKg === 'number' && this.weightKg < 50) {
+      return next(new Error('Weight must be at least 50kg'));
+    }
+    if (typeof this.age === 'number' && (this.age < 18 || this.age > 65)) {
+      return next(new Error('Age must be between 18 and 65'));
     }
     // Keep location <-> coordinates in sync (best-effort)
     if (this.coordinates && Number.isFinite(this.coordinates.lng) && Number.isFinite(this.coordinates.lat)) {

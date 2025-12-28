@@ -8,6 +8,7 @@ import { colors } from '@/styles/commonStyles';
 import api, { Donor } from "../service/api";
 import useAuth from '@/hooks/useAuth';
 import SelectField from '../components/SelectField';
+import { LOCATIONS as STD_LOCATIONS } from '@/constants/locations';
 
 export default function EmergencyRequest() {
   const { user, setUser } = useAuth();
@@ -19,16 +20,13 @@ export default function EmergencyRequest() {
   const defaultBloodTypes = useMemo(() => ['A+','A-','B+','B-','AB+','AB-','O+','O-'], []);
   const [bloodTypes, setBloodTypes] = useState<string[]>(defaultBloodTypes);
   // Use static Banaadir districts as baseline; merge backend meta if present.
-  const banaadirDistricts = useMemo(() => [
-    'Abdiaziz', 'Bondhere', 'Daynile', 'Dharkenley', 'Hamar Jajab', 'Hamar Weyne', 'Hodan',
-    'Howlwadaag', 'Kaaran', 'Shangani', 'Shibis', 'Wadajir (Medina)', 'Waberi',
-    'Wardhiigley (Warta Nabadda)', 'Yaqshid', 'Garasbaley', 'Kahda',
-  ], []);
-  const [locations, setLocations] = useState<string[]>(banaadirDistricts);
+  // Standardized locations
+  const [locations, setLocations] = useState<string[]>(STD_LOCATIONS);
 
   const [donors, setDonors] = useState<Donor[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Removed detailed emergency form controls to simplify UI per request
 
   const handleBack = () => {
     router.back();
@@ -55,7 +53,7 @@ export default function EmergencyRequest() {
         q: searchQuery.trim() || undefined,
         bloodType: selectedBloodType || undefined,
         city: selectedLocation || undefined,
-        // include both availability states so user can see disabled contacts too
+        // Do not filter by availability; show both and label clearly
       });
       setDonors(result);
     } catch (e: any) {
@@ -78,11 +76,7 @@ export default function EmergencyRequest() {
           // Merge backend-provided types with the defaults
           setBloodTypes(Array.from(new Set([...defaultBloodTypes, ...bt])));
         }
-        if (locs.length) {
-          // Merge backend locations with static list, ensuring uniqueness
-          const merged = Array.from(new Set([...banaadirDistricts, ...locs]));
-          setLocations(merged);
-        }
+        // Enforce standardized locations list; ignore backend variants
       } catch (e) {
         // Keep empty lists on failure; user can still type & search by q
       }
@@ -90,7 +84,15 @@ export default function EmergencyRequest() {
     return () => { cancelled = true; };
   }, []);
 
-  const filteredDonors = donors; // server already filters; keep placeholder if client-side tweaks are needed
+  // Auto-search as users adjust filters or right after screen opens
+  useEffect(() => {
+    const timeout = setTimeout(() => { fetchDonors(); }, 250);
+    return () => clearTimeout(timeout);
+    // Trigger on query and filter changes
+  }, [searchQuery, selectedBloodType, selectedLocation]);
+
+  const availableDonors = donors.filter(d => !!d.availability);
+  const unavailableDonors = donors.filter(d => !d.availability);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -159,6 +161,8 @@ export default function EmergencyRequest() {
         )}
       </View>
 
+      {/* Emergency Form Controls removed */}
+
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         <TouchableOpacity style={styles.searchButton} onPress={fetchDonors} disabled={loading}>
@@ -168,22 +172,18 @@ export default function EmergencyRequest() {
         
         <TouchableOpacity style={styles.emergencyCallButton} onPress={async () => {
           try {
-            // Ensure requester role before calling requester-only endpoint
+            if (!selectedBloodType || !selectedLocation) {
+              setError('Please select blood type and location');
+              return;
+            }
             if (role !== 'requester') {
-              try {
-                const updated = await api.switchRole('requester');
-                const token = user?.token;
-                await setUser({ token, user: updated });
-              } catch {}
+              try { const updated = await api.switchRole('requester'); const token = user?.token; await setUser({ token, user: updated }); } catch {}
             }
-            if (!selectedBloodType && !selectedLocation) {
-              // Still allow broadcast to all if nothing selected, but better to prompt
-            }
-            await api.emergency({ bloodType: selectedBloodType || undefined, location: selectedLocation || undefined, message: 'Emergency broadcast' });
-            // Optionally navigate to notifications
+            // Broadcast an emergency alert without extra fields
+            await api.emergency({ bloodType: selectedBloodType, location: selectedLocation, message: searchQuery ? `Emergency: ${searchQuery}` : undefined });
             router.push('/(home)/notification');
           } catch (e: any) {
-            setError(e?.message || 'Emergency request failed');
+            setError(e?.message || 'Emergency alert failed');
           }
         }}>
           <IconSymbol name="phone.fill" size={20} color="#FFFFFF" />
@@ -198,11 +198,11 @@ export default function EmergencyRequest() {
         showsVerticalScrollIndicator={false}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.sectionTitle}>Available Donors ({filteredDonors.length})</Text>
+          <Text style={styles.sectionTitle}>Available Donors ({availableDonors.length})</Text>
           {loading && <ActivityIndicator color={colors.primary} />}
         </View>
-        
-        {filteredDonors.map((donor) => (
+
+        {availableDonors.map((donor) => (
           <View key={donor._id} style={styles.donorCard}>
             <View style={styles.donorInfo}>
               <View style={styles.donorAvatar}>
@@ -236,24 +236,54 @@ export default function EmergencyRequest() {
             </View>
             
             <TouchableOpacity 
-              style={[
-                styles.contactButton,
-                !donor.availability && styles.contactButtonDisabled
-              ]}
+              style={[styles.contactButton]}
               onPress={() => handleContact(donor)}
-              disabled={!donor.availability}
             >
-              <Text style={[
-                styles.contactButtonText,
-                !donor.availability && styles.contactButtonTextDisabled
-              ]}>
-                {donor.availability ? 'Contact' : 'Unavailable'}
-              </Text>
+              <Text style={[styles.contactButtonText]}>Contact</Text>
             </TouchableOpacity>
           </View>
         ))}
         
-        {!loading && filteredDonors.length === 0 && (
+        {/* Unavailable donors section */}
+        {unavailableDonors.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={styles.sectionTitle}>Unavailable Donors ({unavailableDonors.length})</Text>
+          </View>
+        )}
+        {unavailableDonors.map((donor) => (
+          <View key={donor._id} style={styles.donorCard}>
+            <View style={styles.donorInfo}>
+              <View style={styles.donorAvatar}>
+                <Text style={styles.donorAvatarText}>🩸</Text>
+              </View>
+              <View style={styles.donorDetails}>
+                <View style={styles.donorHeader}>
+                  <Text style={styles.donorName}>{donor.name}</Text>
+                  <View style={styles.bloodTypeBadge}>
+                    <Text style={styles.bloodTypeText}>{donor.bloodType}</Text>
+                  </View>
+                </View>
+                <View style={styles.donorMeta}>
+                  <View style={styles.metaItem}>
+                    <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
+                    <Text style={styles.metaText}>{donor.location || 'Unknown'}</Text>
+                  </View>
+                  {!!donor.phone && (
+                    <View style={styles.metaItem}>
+                      <IconSymbol name="phone.fill" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{donor.phone}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+            <View style={[styles.contactButton, styles.contactButtonDisabled]}>
+              <Text style={[styles.contactButtonText, styles.contactButtonTextDisabled]}>Unavailable</Text>
+            </View>
+          </View>
+        ))}
+
+        {!loading && availableDonors.length === 0 && unavailableDonors.length === 0 && (
           <View style={styles.emptyState}>
             <IconSymbol name="person.slash" size={48} color={colors.textSecondary} />
             <Text style={styles.emptyStateText}>No donors found</Text>
@@ -487,7 +517,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 2,
   },
   donorInfo: {

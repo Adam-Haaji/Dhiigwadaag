@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SelectField from '../components/SelectField';
+import { LOCATION_OPTIONS } from '@/constants/locations';
 import { router } from 'expo-router';
 import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
@@ -31,30 +32,11 @@ const BLOOD_TYPES = [
   'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-',
 ].map(v => ({ label: v, value: v }));
 
-const LOCATIONS = [
-  'Abdiaziz',
-  'Bondhere',
-  'Daynile',
-  'Dharkenley',
-  'Hamar Jajab',
-  'Hamar Weyne',
-  'Hodan',
-  'Howlwadaag',
-  'Kaaran',
-  'Shangani',
-  'Shibis',
-  'Wadajir (Medina)',
-  'Waberi',
-  'Wardhiigley (Warta Nabadda)',
-  'Yaqshid',
-  'Garasbaley',
-  'Kahda',
-].map(v => ({ label: v, value: v }));
+// Use centralized location options
+const LOCATIONS = LOCATION_OPTIONS;
 
 const URGENCY = [
-  { label: 'Low', value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High', value: 'high' },
+  { label: 'Normal', value: 'normal' },
   { label: 'Critical', value: 'critical' },
 ];
 
@@ -82,10 +64,11 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
     const e: Partial<Record<keyof FormState, string>> = {};
     if (!form.patientName.trim()) e.patientName = 'Patient name is required.';
     if (!form.bloodType) e.bloodType = 'Please select a blood type.';
-    if (!form.units || Number.isNaN(Number(form.units)) || Number(form.units) <= 0) {
-      e.units = 'Enter units needed (a positive number).';
+    // Units optional; if provided must be a positive number
+    if (form.units && (Number.isNaN(Number(form.units)) || Number(form.units) <= 0)) {
+      e.units = 'Enter units as a positive number.';
     }
-    if (!form.hospitalName.trim()) e.hospitalName = 'Hospital name is required.';
+    // Hospital optional for regular requests
     if (!form.location) e.location = 'Please select a location.';
     if (!/^\+?[0-9()\-\s]{7,}$/.test(form.phone.trim())) e.phone = 'Enter a valid contact phone.';
     if (!form.urgency) e.urgency = 'Please select urgency.';
@@ -115,15 +98,16 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       }
 
       // Create the request in backend
-      const payload = {
+      const payload: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical' } = {
         patientName: form.patientName.trim(),
         bloodType: String(form.bloodType),
         location: String(form.location),
-        units: Number(form.units),
-        urgency: (form.urgency || 'normal') as any,
+        units: Number(form.units || '1'),
+        // Backend normalizes to 'Normal' or 'Critical'; send title case
+        urgency: String(form.urgency || 'normal').toLowerCase() === 'critical' ? 'Critical' : 'Normal',
       };
       try {
-        await api.createRequest(payload);
+        const created = await api.createRequest(payload);
       } catch (e1: any) {
         const msg = e1?.message || '';
         // If role guard blocked, try switching and retry once
@@ -132,7 +116,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
             const updated = await api.switchRole('requester');
             const token = user?.token;
             await setUser({ token, user: updated });
-            await api.createRequest(payload);
+            const created2 = await api.createRequest(payload);
           } catch (e2: any) {
             throw e2;
           }
@@ -141,8 +125,8 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
         }
       }
       onSubmitSuccess?.(form);
-      // Navigate to Search Donor with prefilled blood type + location
-      router.replace({ pathname: '/searchDonor', params: { bloodType: String(form.bloodType), city: String(form.location) } });
+      // Navigate back to Request dashboard
+      router.replace('/(home)/request');
     } catch (e: any) {
       Alert.alert('Submit failed', e?.message || 'Could not create request.');
     }
@@ -183,7 +167,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
                 onChangeText={(t) => set('patientName', t)}
                 placeholder="Enter patient name"
                 placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.patientName && styles.inputError]}
+                style={[styles.input, submitted && errors.patientName ? styles.inputError : undefined]}
               />
               {submitted && errors.patientName ? (
                 <Text style={styles.errorText}>{errors.patientName}</Text>
@@ -214,7 +198,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
                   placeholder="Units"
                   keyboardType="number-pad"
                   placeholderTextColor="#9CA3AF"
-                  style={[styles.input, submitted && errors.units && styles.inputError]}
+                  style={[styles.input, submitted && errors.units ? styles.inputError : undefined]}
                 />
                 {submitted && errors.units ? (
                   <Text style={styles.errorText}>{errors.units}</Text>
@@ -232,7 +216,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
                 onChangeText={(t) => set('hospitalName', t)}
                 placeholder="Enter hospital name"
                 placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.hospitalName && styles.inputError]}
+                style={[styles.input, submitted && errors.hospitalName ? styles.inputError : undefined]}
               />
               {submitted && errors.hospitalName ? (
                 <Text style={styles.errorText}>{errors.hospitalName}</Text>
@@ -261,7 +245,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
                 placeholder="Enter contact number"
                 keyboardType="phone-pad"
                 placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.phone && styles.inputError]}
+                style={[styles.input, submitted && errors.phone ? styles.inputError : undefined]}
               />
               {submitted && errors.phone ? (
                 <Text style={styles.errorText}>{errors.phone}</Text>

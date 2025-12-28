@@ -13,7 +13,6 @@ import { useNavigation } from "@react-navigation/native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import useAuth from "@/hooks/useAuth";
-import { useTheme } from "@/context/ThemeContext";
 
 const PRIMARY = "#E53935";
 const BG = "#FFFFFF";
@@ -60,68 +59,58 @@ export default function Settings() {
   const [pushNotifs, setPushNotifs] = React.useState(true);
   const [emailNotifs, setEmailNotifs] = React.useState(true);
   const [locationAllowed, setLocationAllowed] = React.useState(true);
-  const { isDark, toggleDark } = useTheme();
+  const [darkMode, setDarkMode] = React.useState(false);
   const { user } = useAuth();
-  const _roleLabel = String((user as any)?.role || 'Unknown');
+  const roleLabel = String((user as any)?.role || 'Unknown');
 
-  const _onLogout = () => {
+  const onLogout = () => {
     Alert.alert("Logout", "This is a UI-only action.");
   };
-  const _onDelete = () => {
+  const onDelete = () => {
     Alert.alert("Delete Account", "This is a UI-only action.");
   };
 
-  const BG_DARK = "#0F1115";
-  const TEXT_DARK = "#F9FAFB";
-  const TEXT_MUTED_DARK = "#9CA3AF";
-  const CARD_DARK = "#1F2937";
-  const BORDER_DARK = "#374151";
-  const HIGHLIGHT_DARK = "#2A3647";
-
-  const bg = isDark ? BG_DARK : BG;
-  const text = isDark ? TEXT_DARK : TEXT;
-  const _textMuted = isDark ? TEXT_MUTED_DARK : TEXT_MUTED;
-  const card = isDark ? CARD_DARK : CARD;
-  const border = isDark ? BORDER_DARK : BORDER;
-  const _highlight = isDark ? HIGHLIGHT_DARK : HIGHLIGHT;
-
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: bg }]}>
-      <View style={[styles.header, { backgroundColor: card, borderBottomColor: border }] }>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={22} color={text} />
-          <Text style={[styles.backText, { color: text }]}>Back</Text>
+          <Ionicons name="chevron-back" size={24} color={TEXT} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: text }]}>Settings</Text>
+        <Text style={styles.headerTitle}>Settings</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 12 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Account */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Account</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
-            {/* Removed role row per design focus */}
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.group}>
+            <RowItem
+              icon="pricetag-outline"
+              title="Your Role"
+              subtitle={roleLabel}
+            />
+            <View style={styles.separator} />
             <RowItem
               icon="person-circle-outline"
               title="Edit Profile"
               subtitle="Update your personal information"
-              onPress={() => router.push('/editProfile')}
+              onPress={() => navigation.navigate("EditProfile" as never)}
             />
             <View style={styles.separator} />
             <RowItem
               icon="key-outline"
               title="Change Password"
               subtitle="Update your password"
-              onPress={() => router.push('/changePassword')}
+              onPress={() => navigation.navigate("ResetPassword" as never)}
             />
           </View>
         </View>
 
         {/* Notifications */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Notifications</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <View style={styles.group}>
             <RowItem
               icon="notifications-outline"
               title="Push Notifications"
@@ -140,8 +129,8 @@ export default function Settings() {
 
         {/* Privacy */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Privacy & Access</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
+          <Text style={styles.sectionTitle}>Privacy & Security</Text>
+          <View style={styles.group}>
             <RowItem
               icon="location-outline"
               title="Location Services"
@@ -151,43 +140,54 @@ export default function Settings() {
             <View style={styles.separator} />
             <RowItem icon="shield-outline" title="Privacy Policy" onPress={() => Alert.alert("Privacy Policy")} />
             <View style={styles.separator} />
-            {/* Removed Terms per provided design */}
+            <RowItem icon="document-text-outline" title="Terms of Service" onPress={() => Alert.alert("Terms")} />
           </View>
         </View>
 
         {/* Appearance */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Appearance</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <View style={styles.group}>
             <RowItem
               icon="moon-outline"
               title="Dark Mode"
               subtitle="Switch to dark theme"
-              right={<Switch value={isDark} onValueChange={toggleDark} />}
+              right={<Switch value={darkMode} onValueChange={setDarkMode} />}
             />
           </View>
         </View>
 
         {/* Support */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Support</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
+          <Text style={styles.sectionTitle}>Support</Text>
+          <View style={styles.group}>
             <RowItem icon="help-circle-outline" title="Help Center" onPress={() => Alert.alert("Help Center")} />
             <View style={styles.separator} />
-            {/* Simplified Support per design */}
+            <RowItem icon="mail-open-outline" title="Contact Us" onPress={() => Alert.alert("Contact Us")} />
+            <View style={styles.separator} />
+            <RowItem icon="star-outline" title="Rate App" onPress={() => Alert.alert("Rate App")} />
+            <View style={styles.separator} />
             {/* AI Match Demo removed */}
           </View>
         </View>
 
         {/* About */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: text }]}>About</Text>
-          <View style={[styles.group, { backgroundColor: card, borderColor: border }] }>
+          <Text style={styles.sectionTitle}>About</Text>
+          <View style={styles.group}>
             <RowItem icon="information-circle-outline" title="App Version" subtitle="1.0.0" />
           </View>
         </View>
 
-        {/* Danger Zone removed in design */}
+        {/* Danger Zone */}
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.outlineBtn} onPress={onLogout}>
+            <Text style={[styles.outlineTxt, { color: PRIMARY }]}>Logout</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dangerBtn} onPress={onDelete}>
+            <Text style={styles.dangerTxt}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -199,59 +199,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     backgroundColor: CARD,
-    
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: HIGHLIGHT,
-    paddingHorizontal: 12,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    marginTop: 40
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
   },
-  backText: { color: TEXT, fontWeight: '700' },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: TEXT },
-  card: { paddingHorizontal: 12, marginTop: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: TEXT, marginBottom: 10 },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: TEXT },
+  card: { paddingHorizontal: 20, marginTop: 20 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: TEXT, marginBottom: 10 },
   group: {
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
     overflow: "hidden",
-    // subtle shadow to match design
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   rowLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: HIGHLIGHT,
     alignItems: "center",
     justifyContent: "center",
   },
-  rowTitle: { fontSize: 17, fontWeight: "800", color: TEXT },
+  rowTitle: { fontSize: 16, fontWeight: "600", color: TEXT },
   rowSubtitle: { fontSize: 12, color: TEXT_MUTED, marginTop: 2 },
   rowRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  separator: { height: 1, backgroundColor: BORDER },
-  // removed action buttons per design
+  separator: { height: 1, backgroundColor: "#F3F4F6" },
+  actions: { paddingHorizontal: 20, marginTop: 24, gap: 12 },
+  outlineBtn: {
+    backgroundColor: CARD,
+    borderWidth: 1,
+    borderColor: PRIMARY,
+    borderRadius: 12,
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  outlineTxt: { fontSize: 16, fontWeight: "700" },
+  dangerBtn: { backgroundColor: PRIMARY, borderRadius: 12, alignItems: "center", paddingVertical: 14 },
+  dangerTxt: { color: BG, fontSize: 16, fontWeight: "700" },
 });

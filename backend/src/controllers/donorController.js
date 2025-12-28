@@ -3,6 +3,7 @@ import Donor from '../models/Donor.js';
 import DonorEligibilityLog from '../models/DonorEligibilityLog.js';
 import { yearsBetween } from '../utils/dateUtils.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
+import { LOCATIONS, isValidLocation } from '../utils/locations.js';
 
 function computeMenus(role) {
   const r = String(role || '').toLowerCase();
@@ -125,6 +126,14 @@ export const createDonor = async (req, res) => {
       unavailableUntil: user.unavailableUntil,
       menus: computeMenus(user.role),
     };
+    // Trigger real-time matching when a donor becomes available/registered
+    try {
+      const { onDonorAvailable } = await import('../services/realtimeMatcher.js');
+      if (String(donor.availabilityStatus) === 'available') {
+        onDonorAvailable(donor).catch(() => {});
+      }
+    } catch (_) {}
+
     return res.status(201).json({ donor, user: summary });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -216,6 +225,14 @@ export const searchDonors = async (req, res) => {
   try {
     const { bloodType, city, availability, q: query } = req.query;
 
+    // Enforce exact canonical location matching when a city is provided
+    if (city !== undefined && city !== null) {
+      const cityVal = String(city).trim();
+      if (!isValidLocation(cityVal)) {
+        return res.status(400).json({ error: 'Invalid location. Use a canonical district value.' });
+      }
+    }
+
     // Build Donor model query
     const donorAnd = [];
     if (availability !== undefined) {
@@ -225,29 +242,33 @@ export const searchDonors = async (req, res) => {
     }
     if (bloodType) donorAnd.push({ bloodGroup: String(bloodType).toUpperCase() });
     if (city) {
-      const esc = String(city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      donorAnd.push({ district: { $regex: new RegExp(esc, 'i') } });
+      const cityVal = String(city).trim();
+      donorAnd.push({ district: cityVal });
     }
     if (query) {
       const val = String(query).trim();
       const btPattern = /^(A|B|AB|O)[+-]$/i;
       if (btPattern.test(val)) donorAnd.push({ bloodGroup: val.toUpperCase() });
       else {
-        const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        donorAnd.push({
-          $or: [
-            { district: { $regex: new RegExp(esc, 'i') } },
-            { fullName: { $regex: new RegExp(esc, 'i') } },
-            { phone: { $regex: new RegExp(esc, 'i') } },
-            { email: { $regex: new RegExp(esc, 'i') } },
-          ],
-        });
+        // If query is a canonical location, match by exact district; otherwise search name/phone/email
+        if (isValidLocation(val)) {
+          donorAnd.push({ district: val });
+        } else {
+          const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          donorAnd.push({
+            $or: [
+              { fullName: { $regex: new RegExp(esc, 'i') } },
+              { phone: { $regex: new RegExp(esc, 'i') } },
+              { email: { $regex: new RegExp(esc, 'i') } },
+            ],
+          });
+        }
       }
     }
     const donorQuery = donorAnd.length ? { $and: donorAnd } : {};
 
     // Build legacy User model query (for backward compatibility donors stored in Users)
-    const userAnd = [{ role: 'Donor' }];
+    const userAnd = [{ role: { $in: ['donor', 'both'] } }];
     if (availability !== undefined) {
       const val = String(availability).toLowerCase();
       if (val === 'true' || val === '1') userAnd.push({ availability: true });
@@ -255,23 +276,27 @@ export const searchDonors = async (req, res) => {
     }
     if (bloodType) userAnd.push({ bloodType: String(bloodType).toUpperCase() });
     if (city) {
-      const esc = String(city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      userAnd.push({ location: { $regex: new RegExp(esc, 'i') } });
+      const cityVal = String(city).trim();
+      userAnd.push({ location: cityVal });
     }
     if (query) {
       const val = String(query).trim();
       const btPattern = /^(A|B|AB|O)[+-]$/i;
       if (btPattern.test(val)) userAnd.push({ bloodType: val.toUpperCase() });
       else {
-        const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        userAnd.push({
-          $or: [
-            { location: { $regex: new RegExp(esc, 'i') } },
-            { name: { $regex: new RegExp(esc, 'i') } },
-            { phone: { $regex: new RegExp(esc, 'i') } },
-            { email: { $regex: new RegExp(esc, 'i') } },
-          ],
-        });
+        // If query is a canonical location, match by exact location; otherwise search name/phone/email
+        if (isValidLocation(val)) {
+          userAnd.push({ location: val });
+        } else {
+          const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          userAnd.push({
+            $or: [
+              { name: { $regex: new RegExp(esc, 'i') } },
+              { phone: { $regex: new RegExp(esc, 'i') } },
+              { email: { $regex: new RegExp(esc, 'i') } },
+            ],
+          });
+        }
       }
     }
     const userQuery = userAnd.length ? { $and: userAnd } : {};
@@ -332,9 +357,8 @@ export const searchDonors = async (req, res) => {
 // GET /api/donors/meta -> { bloodTypes: string[], locations: string[] }
 export const getDonorMeta = async (req, res) => {
   try {
-    const [bloodGroupsRaw, districtsRaw] = await Promise.all([
+    const [bloodGroupsRaw] = await Promise.all([
       Donor.distinct('bloodGroup', { bloodGroup: { $exists: true, $ne: '' } }),
-      Donor.distinct('district', { district: { $exists: true, $ne: '' } }),
     ]);
     const order = ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'];
     const bloodTypes = bloodGroupsRaw
@@ -348,10 +372,8 @@ export const getDonorMeta = async (req, res) => {
         if (ib === -1) return -1;
         return ia - ib;
       });
-    const locations = districtsRaw
-      .filter(Boolean)
-      .map((x) => String(x))
-      .sort((a, b) => a.localeCompare(b));
+    // Always return canonical locations to prevent drift
+    const locations = [...LOCATIONS];
     return res.json({ bloodTypes, locations });
   } catch (err) {
     return res.status(500).json({ error: err.message });

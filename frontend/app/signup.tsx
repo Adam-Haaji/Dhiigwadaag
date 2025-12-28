@@ -49,12 +49,12 @@ const Signup = () => {
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Full Name *</Text>
               <Controller control={control} name="name"
-                rules={{ required: true, minLength: 3 }}
+                rules={{ required: true, minLength: 3, pattern: /^[A-Za-z\s]+$/ }}
                 render={({ field }: any) => (
                   <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your full name" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} />
                 )}
               />
-              {errors?.name && <Text style={styles.err}>Name must be at least 3 characters</Text>}
+              {errors?.name && <Text style={styles.err}>{errors.name.type === 'pattern' ? 'This field must contain letters only' : 'Name must be at least 3 characters'}</Text>}
             </View>
 
             <View style={styles.inputContainer}>
@@ -65,18 +65,18 @@ const Signup = () => {
                   <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your email" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} autoCapitalize="none" keyboardType="email-address" />
                 )}
               />
-              {errors?.email && <Text style={styles.err}>Enter a valid email</Text>}
+              {errors?.email && <Text style={styles.err}>Please enter a valid email address (example@gmail.com)</Text>}
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Phone Number *</Text>
               <Controller control={control} name="phone"
-                rules={{ required: true, pattern: /^\d{9,}$/ }}
+                rules={{ required: true, pattern: /^\d{9,12}$/ }}
                 render={({ field }: any) => (
                   <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your phone number" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} keyboardType="phone-pad" />
                 )}
               />
-              {errors?.phone && <Text style={styles.err}>Enter a valid phone (9+ digits)</Text>}
+              {errors?.phone && <Text style={styles.err}>Enter a valid phone number</Text>}
             </View>
 
             <View style={styles.inputContainer}>
@@ -101,12 +101,12 @@ const Signup = () => {
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Password *</Text>
               <Controller control={control} name="password"
-                rules={{ required: true, minLength: 6 }}
+                rules={{ required: true, pattern: /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/ }}
                 render={({ field }: any) => (
                   <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your password" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} secureTextEntry />
                 )}
               />
-              {errors?.password && <Text style={styles.err}>Password must be at least 6 characters</Text>}
+              {errors?.password && <Text style={styles.err}>Password must be at least 8 characters and include a number, uppercase letter, and symbol</Text>}
             </View>
 
             <View style={styles.inputContainer}>

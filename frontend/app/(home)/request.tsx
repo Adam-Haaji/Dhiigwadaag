@@ -13,6 +13,7 @@ export default function RequestScreen() {
   const role = String(user?.user?.role || '').toLowerCase();
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
+  // Removed inline donors section/state per request
   const load = useCallback(async () => {
     if (!(role === 'requester' || role === 'both' || role === 'admin')) return;
     try {
@@ -28,6 +29,7 @@ export default function RequestScreen() {
       router.replace('/role');
     }
     load();
+    return () => {};
   }, [role]);
   const handleCreateRequest = () => {
     router.push('/createRequest');
@@ -36,6 +38,8 @@ export default function RequestScreen() {
   const handleEmergencyRequest = () => {
     router.push('/emergencyRequest');
   };
+
+  // Donors auto-load logic removed; use Emergency Request screen for discovery
 
   const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   const handleSwitchToDonor = async () => {
@@ -194,6 +198,8 @@ export default function RequestScreen() {
             </View>
           ))}
         </View>
+
+        {/* Available Donors section removed per request; use Emergency screen for donor search */}
 
         {/* Guidelines */}
         <View style={styles.sectionCard}>

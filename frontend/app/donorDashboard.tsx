@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuth from '@/hooks/useAuth';
 import { colors } from '@/styles/commonStyles';
 import api from '@/service/api';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
 import HeroCard from '@/components/HeroCard';
 
 export default function DonorDashboard() {
-  const router = useRouter();
   const { user, setUser } = useAuth();
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
@@ -38,6 +38,19 @@ export default function DonorDashboard() {
         }
       }
     } catch {}
+  }
+
+  async function openLatestMatchOrNotification() {
+    try {
+      const m = await api.listMyMatches();
+      if (Array.isArray(m) && m.length) {
+        const topId = String(m[0]._id);
+        router.push({ pathname: '/matchedRequestDetail', params: { id: topId, mode: 'donor' } });
+        return;
+      }
+    } catch {}
+    // Fallback to notifications auto-open flow
+    router.push({ pathname: '/(home)/notification', params: { openLatestRequest: '1' } });
   }
 
   async function loadNotes() {
@@ -74,12 +87,20 @@ export default function DonorDashboard() {
       {!!toast && (
         <View style={s.toast}>
           <Text style={s.toastText}>{toast.text}</Text>
-          <TouchableOpacity onPress={() => router.push({ pathname: '/matchedRequestDetail', params: { id: toast.id } })}>
+          <TouchableOpacity style={s.toastCtaBtn} onPress={() => router.push({ pathname: '/matchedRequestDetail', params: { id: toast.id } })}>
+            <IconSymbol name="eye.fill" size={14} color={colors.primary} />
             <Text style={s.toastCta}>View</Text>
           </TouchableOpacity>
         </View>
       )}
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={s.topRowBetween}>
+          <Text style={s.header}>Donor Dashboard</Text>
+          <TouchableOpacity style={s.linkPill} onPress={openLatestMatchOrNotification}>
+            <IconSymbol name="bell.fill" size={16} color="#FFFFFF" />
+            <Text style={s.linkPillTxt}>View Matched Requests</Text>
+          </TouchableOpacity>
+        </View>
         {/* Hero (top rectangle styled like image 1) */}
         <HeroCard
           title="Become a Donor"
@@ -93,7 +114,7 @@ export default function DonorDashboard() {
             {
               icon: 'person.2.fill',
               bg: '#F59E0B',
-              onPress: () => router.push('/donorMatches'),
+              onPress: openLatestMatchOrNotification,
             },
           ]}
         />
@@ -161,9 +182,12 @@ export default function DonorDashboard() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F6F8' },
   content: { paddingVertical: 16, paddingBottom: 40 },
+  topRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
+  header: { fontSize: 18, fontWeight: '800', color: '#111827' },
   toast: { position: 'absolute', top: 10, left: 16, right: 16, zIndex: 10, backgroundColor: '#111827', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toastText: { color: '#FFFFFF', fontWeight: '700' },
-  toastCta: { color: '#60A5FA', fontWeight: '800' },
+  toastCtaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  toastCta: { color: colors.primary, fontWeight: '800' },
   topActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: 8 },
   switchPill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#DADDE1' },
   switchPillText: { color: '#111827', fontWeight: '700' },
@@ -182,6 +206,8 @@ const s = StyleSheet.create({
   itemTitle: { color: '#111827', fontWeight: '600' },
   itemMeta: { color: '#6B7280', marginTop: 2 },
   empty: { color: '#6B7280' },
-  profileBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: '#2B79F7', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
-  profileBtnText: { color: '#fff', fontWeight: '700' }
+  profileBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+  profileBtnText: { color: '#fff', fontWeight: '700' },
+  linkPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+  linkPillTxt: { color: '#fff', fontWeight: '800' },
 });

@@ -20,7 +20,8 @@ export default function RequestStatus() {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-  const doc = await apiClient.getBloodRequest(id);
+      // Use unified Requests endpoint; BloodRequests caused 404 for Active Requests
+      const doc = await apiClient.getRequest(id);
       setData(doc);
       // Ask backend if current user is the matched donor for this request
       if (String(doc?.status || '').toLowerCase() === 'matched') {
@@ -87,9 +88,9 @@ export default function RequestStatus() {
           <View style={s.card}>
             <Text style={s.title}>{statusMessage(data.status)}</Text>
             <Text style={s.row}>Patient: <Text style={s.bold}>{data.patientName}</Text></Text>
-            <Text style={s.row}>Blood Group: <Text style={s.bold}>{data.bloodGroup}</Text></Text>
-            <Text style={s.row}>District: <Text style={s.bold}>{data.district}</Text></Text>
-            <Text style={s.row}>Urgency: <Text style={s.bold}>{data.urgentLevel}</Text></Text>
+            <Text style={s.row}>Blood Group: <Text style={s.bold}>{data.bloodGroup || data.bloodType}</Text></Text>
+            <Text style={s.row}>District: <Text style={s.bold}>{data.district || data.location}</Text></Text>
+            <Text style={s.row}>Urgency: <Text style={s.bold}>{data.urgencyLevel || data.urgentLevel || data.urgency}</Text></Text>
             <Text style={s.row}>Status: <Text style={s.bold}>{data.status}</Text></Text>
             {data.fulfilledAt && <Text style={s.row}>Fulfilled At: <Text style={s.bold}>{new Date(data.fulfilledAt).toLocaleString()}</Text></Text>}
           </View>
