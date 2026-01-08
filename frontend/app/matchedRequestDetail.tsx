@@ -34,6 +34,7 @@ export default function MatchedRequestDetail() {
   }
 
   useEffect(() => { load(); }, [id]);
+  
 
   const requester = request?.requester || request?.requesterId || {};
   const requesterName = requester?.name || requester?.email || 'Requester';
