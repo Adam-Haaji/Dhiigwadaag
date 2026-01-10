@@ -1,5 +1,5 @@
 import express from 'express';
-import { createRequest, getRequests, emergencyBroadcast, createEmergencyRequest, getRequestById, respondToRequest, markFulfilled, deleteRequest, cancelRequest, acceptDonation, completeDonation, declineDonation, listMatchesForMe } from '../controllers/requestController.js';
+import { createRequest, getRequests, emergencyBroadcast, createEmergencyRequest, getRequestById, getMatchedDonorForRequest, respondToRequest, markFulfilled, deleteRequest, cancelRequest, acceptDonation, completeDonation, declineDonation, listMatchesForMe } from '../controllers/requestController.js';
 import { authMiddleware, requireRequester, requireDonor, blockNone } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -9,6 +9,7 @@ const router = express.Router();
 router.post('/', authMiddleware, createRequest);
 router.get('/', authMiddleware, getRequests);
 router.get('/:id', authMiddleware, blockNone, getRequestById);
+router.get('/:id/matched-donor', authMiddleware, blockNone, getMatchedDonorForRequest);
 // Legacy AI-based match endpoint removed
 // Emergency broadcast can be initiated by any authenticated user
 router.post('/emergency', authMiddleware, emergencyBroadcast);

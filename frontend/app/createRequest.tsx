@@ -16,6 +16,12 @@ import { LOCATION_OPTIONS } from '@/constants/locations';
 import { router } from 'expo-router';
 import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { semanticColors, radii, spacing } from '@/constants/colors';
+import { fontFamilies } from '@/constants/fonts';
+import { moderateScale, responsiveFont } from '@/constants/theme';
 
 type FormState = {
   patientName: string;
@@ -40,13 +46,14 @@ const URGENCY = [
   { label: 'Critical', value: 'critical' },
 ];
 
-const accent = '#E74C3C'; // pinkish accent to match screenshot vibe
+// Use theme semantic colors for accents
 
 const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (data: FormState) => void; }> = ({
   onBack,
   onSubmitSuccess,
 }) => {
   const { user, setUser } = useAuth();
+  const { isDark } = useTheme();
   const [form, setForm] = useState<FormState>({
     patientName: '',
     bloodType: null,
@@ -131,9 +138,106 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       Alert.alert('Submit failed', e?.message || 'Could not create request.');
     }
   };
+  const handleBack = () => {
+    if (onBack) return onBack();
+    router.back();
+  };
+
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: moderateScale(20),
+      paddingVertical: moderateScale(14),
+      borderBottomWidth: 1,
+      borderBottomColor: semanticColors.borderSubtle,
+      backgroundColor: semanticColors.bgSurface,
+    },
+    backBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: semanticColors.bgAlt,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      paddingHorizontal: 12,
+      height: 36,
+      borderRadius: 12,
+    },
+    backText: { fontFamily: fontFamilies.semibold },
+    headerTitle: { fontSize: responsiveFont(18), fontFamily: fontFamilies.bold },
+    content: {
+      paddingHorizontal: moderateScale(24),
+      paddingTop: moderateScale(14),
+      paddingBottom: moderateScale(24),
+    },
+    headerWrap: { alignItems: 'center', marginBottom: moderateScale(16) },
+    title: { fontSize: responsiveFont(28), fontFamily: fontFamilies.bold },
+    subtitle: { fontSize: responsiveFont(16), fontFamily: fontFamilies.medium },
+    card: {
+      borderRadius: radii.lg,
+      paddingHorizontal: moderateScale(spacing.lg),
+      paddingVertical: moderateScale(spacing.lg),
+      shadowColor: semanticColors.cardShadow,
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      backgroundColor: semanticColors.bgSurface,
+    },
+    field: { marginBottom: 14 },
+    label: { fontSize: 14, color: semanticColors.textPrimary, marginBottom: 6, fontFamily: fontFamilies.semibold },
+    required: { color: semanticColors.interactiveDanger, fontFamily: fontFamilies.bold },
+    input: {
+      height: 48,
+      backgroundColor: semanticColors.bgSurface,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      fontSize: 15,
+      color: semanticColors.textPrimary,
+    },
+    inputError: { borderColor: semanticColors.interactiveDanger },
+    errorText: { marginTop: 6, color: semanticColors.interactiveDanger, fontSize: 12, fontFamily: fontFamilies.medium },
+    row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 2 },
+    col: { flexGrow: 1 },
+    textArea: { height: 120, paddingTop: 12, paddingBottom: 12 },
+    submitBtn: {
+      marginTop: 10,
+      backgroundColor: semanticColors.interactivePrimary,
+      height: 56,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: semanticColors.cardShadow,
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+    submitBtnActiveAnyway: {},
+    submitText: { color: semanticColors.textInverse, fontFamily: fontFamilies.bold, fontSize: 16 },
+  }), [isDark]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[s.root, { backgroundColor: semanticColors.bgAlt }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Header styled like Privacy/Settings */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={handleBack}>
+          <Ionicons name="chevron-back" size={22} color={semanticColors.textPrimary} />
+          <Text style={[s.backText, { color: semanticColors.textPrimary }]}>Back</Text>
+        </TouchableOpacity>
+        <Text style={[s.headerTitle, { color: semanticColors.textPrimary }]}>Create Request</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.select({ ios: 'padding', android: undefined })}
         style={{ flex: 1 }}
@@ -141,42 +245,33 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       >
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={s.content}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header - match Notification style */}
-          <View style={styles.headerGradient}>
-            <View style={styles.headerRowTop}>
-              <TouchableOpacity style={styles.backRow} onPress={onBack}>
-                <Text style={styles.backIcon}>←</Text>
-                <Text style={styles.backText}>Back</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.headerTitle}>Create Request</Text>
-            <Text style={styles.headerSubtitle}>Fill in the patient details</Text>
+          <View style={s.headerWrap}>
+            <Text style={[s.title, { color: semanticColors.textPrimary }]}>Create Request</Text>
+            <Text style={[s.subtitle, { color: semanticColors.textSecondary }]}>Fill in the patient details</Text>
           </View>
 
-          <View style={styles.card}>
-            {/* Patient Name */}
-            <View style={styles.field}>
-              <Text style={styles.label}>
-                Patient Name <Text style={styles.required}>*</Text>
+          <View style={s.card}>
+            <View style={s.field}>
+              <Text style={s.label}>
+                Patient Name <Text style={s.required}>*</Text>
               </Text>
               <TextInput
                 value={form.patientName}
                 onChangeText={(t) => set('patientName', t)}
                 placeholder="Enter patient name"
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.patientName ? styles.inputError : undefined]}
+                placeholderTextColor={semanticColors.textMuted}
+                style={[s.input, submitted && errors.patientName ? s.inputError : undefined]}
               />
               {submitted && errors.patientName ? (
-                <Text style={styles.errorText}>{errors.patientName}</Text>
+                <Text style={s.errorText}>{errors.patientName}</Text>
               ) : null}
             </View>
 
-            {/* Blood Type + Units Needed */}
-            <View style={styles.row}>
-              <View style={[styles.col, { flex: 1 }]}>
+            <View style={s.row}>
+              <View style={[s.col, { flex: 1 }]}>
                 <SelectField
                   label="Blood Type"
                   required
@@ -188,42 +283,40 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
                 />
               </View>
 
-              <View style={[styles.col, { width: 110 }]}>
-                <Text style={styles.label}>
-                  Units Needed <Text style={styles.required}>*</Text>
+              <View style={[s.col, { width: 110 }]}>
+                <Text style={s.label}>
+                  Units Needed <Text style={s.required}>*</Text>
                 </Text>
                 <TextInput
                   value={form.units}
                   onChangeText={(t) => set('units', t.replace(/[^\d]/g, ''))}
                   placeholder="Units"
                   keyboardType="number-pad"
-                  placeholderTextColor="#9CA3AF"
-                  style={[styles.input, submitted && errors.units ? styles.inputError : undefined]}
+                  placeholderTextColor={semanticColors.textMuted}
+                  style={[s.input, submitted && errors.units ? s.inputError : undefined]}
                 />
                 {submitted && errors.units ? (
-                  <Text style={styles.errorText}>{errors.units}</Text>
+                  <Text style={s.errorText}>{errors.units}</Text>
                 ) : null}
               </View>
             </View>
 
-            {/* Hospital Name */}
-            <View style={styles.field}>
-              <Text style={styles.label}>
-                Hospital Name <Text style={styles.required}>*</Text>
+            <View style={s.field}>
+              <Text style={s.label}>
+                Hospital Name <Text style={s.required}>*</Text>
               </Text>
               <TextInput
                 value={form.hospitalName}
                 onChangeText={(t) => set('hospitalName', t)}
                 placeholder="Enter hospital name"
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.hospitalName ? styles.inputError : undefined]}
+                placeholderTextColor={semanticColors.textMuted}
+                style={[s.input, submitted && errors.hospitalName ? s.inputError : undefined]}
               />
               {submitted && errors.hospitalName ? (
-                <Text style={styles.errorText}>{errors.hospitalName}</Text>
+                <Text style={s.errorText}>{errors.hospitalName}</Text>
               ) : null}
             </View>
 
-            {/* Location */}
             <SelectField
               label="Location"
               required
@@ -234,25 +327,23 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
               error={submitted ? errors.location : undefined}
             />
 
-            {/* Contact Phone */}
-            <View style={styles.field}>
-              <Text style={styles.label}>
-                Contact Phone <Text style={styles.required}>*</Text>
+            <View style={s.field}>
+              <Text style={s.label}>
+                Contact Phone <Text style={s.required}>*</Text>
               </Text>
               <TextInput
                 value={form.phone}
                 onChangeText={(t) => set('phone', t)}
                 placeholder="Enter contact number"
                 keyboardType="phone-pad"
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, submitted && errors.phone ? styles.inputError : undefined]}
+                placeholderTextColor={semanticColors.textMuted}
+                style={[s.input, submitted && errors.phone ? s.inputError : undefined]}
               />
               {submitted && errors.phone ? (
-                <Text style={styles.errorText}>{errors.phone}</Text>
+                <Text style={s.errorText}>{errors.phone}</Text>
               ) : null}
             </View>
 
-            {/* Urgency */}
             <SelectField
               label="Urgency Level"
               required
@@ -263,26 +354,25 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
               error={submitted ? errors.urgency : undefined}
             />
 
-            {/* Additional Notes */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Additional Notes</Text>
+            <View style={s.field}>
+              <Text style={s.label}>Additional Notes</Text>
               <TextInput
                 value={form.notes}
                 onChangeText={(t) => set('notes', t)}
                 placeholder="Any additional information..."
-                placeholderTextColor="#9CA3AF"
-                style={[styles.input, styles.textArea]}
+                placeholderTextColor={semanticColors.textMuted}
+                style={[s.input, s.textArea]}
                 multiline
                 textAlignVertical="top"
               />
             </View>
 
             <TouchableOpacity
-              style={[styles.submitBtn, hasErrors && submitted && styles.submitBtnActiveAnyway]}
+              style={[s.submitBtn, hasErrors && submitted && s.submitBtnActiveAnyway]}
               onPress={handleSubmit}
               activeOpacity={0.9}
             >
-              <Text style={styles.submitText}>Submit Request</Text>
+              <Text style={s.submitText}>Submit Request</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -290,137 +380,5 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#F8FAFC', // page background
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 24,
-  },
-  headerGradient: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    backgroundColor: accent,
-    marginBottom: 12,
-  },
-  headerRowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  backIcon: {
-    fontSize: 16,
-    color: '#374151',
-    marginRight: 6,
-  },
-  backText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  headerTitle: { marginTop: 6, fontSize: 22, fontWeight: '800', color: '#FFF' },
-  headerSubtitle: { marginTop: 2, fontSize: 13, color: '#FFE9EF', marginBottom: 4 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  field: {
-    marginBottom: 14,
-  },
-  label: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  required: {
-    color: '#E74C3C',
-    fontWeight: '700',
-  },
-  input: {
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: '#111827',
-
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  inputError: {
-    borderColor: '#EF4444',
-  },
-  errorText: {
-    marginTop: 6,
-    color: '#EF4444',
-    fontSize: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    marginBottom: 2,
-  },
-  col: {
-    flexGrow: 1,
-  },
-  textArea: {
-    height: 112,
-    paddingTop: 10,
-    paddingBottom: 10,
-  },
-  submitBtn: {
-    marginTop: 8,
-    backgroundColor: accent,
-    height: 48,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    shadowColor: accent,
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  submitBtnActiveAnyway: {
-    // Keep the strong color even if there are errors; UX matches screenshot emphasis
-  },
-  submitText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-});
 
 export default CreateRequestScreen;

@@ -204,6 +204,7 @@ export const api = {
   // users
   me: () => request('GET', '/api/users/me'),
   updateMe: (data: Json) => request('PUT', '/api/users/me', data),
+  changePassword: (data: { oldPassword: string; newPassword: string }) => request('POST', '/api/users/change-password', data),
   switchRole: async (newRole: 'donor'|'requester'|'both') => request('POST', '/api/users/switch-role', { newRole }),
   health: () => request('GET', '/api/health'),
   // donors
@@ -240,6 +241,7 @@ export const api = {
     additionalNote?: string;
     donorId?: string;
   }) => request('POST', '/api/blood-requests', data),
+  listMyBloodRequests: () => request('GET', '/api/blood-requests/mine'),
   // Priority-based create (runs matching immediately)
   createPriorityRequest: (data: {
     patientName: string;
@@ -308,6 +310,8 @@ export const api = {
   markAllRead: () => request('POST', '/api/notifications/mark-all-read'),
   markOneRead: (id: string) => request('POST', `/api/notifications/${id}/read`),
   registerPushToken: (token: string) => request('POST', '/api/notifications/register-token', { token }),
+  // stats
+  statsSummary: () => request('GET', '/api/stats/summary'),
   // matches views
   getRequesterMatchView: (id: string) => request('GET', `/api/matches/${id}/requester-view`),
   getDonorMatchView: (id: string) => request('GET', `/api/matches/${id}/donor-view`),

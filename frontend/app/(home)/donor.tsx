@@ -1,15 +1,18 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import colorsBase, { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 
 export default function DonorDashboard() {
   const { user, setUser } = useAuth();
+  const { isDark } = useTheme();
   const [switching, setSwitching] = useState(false);
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
@@ -84,25 +87,25 @@ export default function DonorDashboard() {
       title: "Health Check",
       description: "Complete health screening before donation",
       icon: "heart.text.square.fill",
-      color: colors.success,
+      color: colorsBase.palette.success,
     },
     {
       title: "Safe Process",
       description: "Sterile equipment and professional staff",
       icon: "shield.checkered",
-      color: colors.secondary,
+      color: colorsBase.palette.info,
     },
     {
       title: "Quick & Easy",
       description: "Donation process takes only 10-15 minutes",
       icon: "clock.fill",
-      color: colors.accent,
+      color: colorsBase.palette.warning,
     },
     {
       title: "Track Impact",
       description: "See how your donations help save lives",
       icon: "chart.line.uptrend.xyaxis",
-      color: colors.primary,
+      color: semanticColors.interactivePrimary,
     },
   ];
 
@@ -114,14 +117,17 @@ export default function DonorDashboard() {
     "Valid ID required",
   ];
 
+  const styles = useMemo(() => makeStyles(), [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={semanticColors.bgAlt} />
       {Platform.OS === 'ios' && (
         <Stack.Screen
           options={{
             title: "Become a Donor",
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
+            headerStyle: { backgroundColor: semanticColors.bgAlt },
+            headerTintColor: semanticColors.textPrimary,
           }}
         />
       )}
@@ -139,11 +145,11 @@ export default function DonorDashboard() {
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
-                <IconSymbol name="drop.fill" size={18} color="#FFFFFF" />
+                <IconSymbol name="drop.fill" size={18} color={semanticColors.textInverse} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>Become a Donor</Text>
-                <Text style={styles.headerSubtitle}>Join thousands of heroes</Text>
+                <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Become a Donor</Text>
+                <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Join thousands of heroes</Text>
               </View>
             </View>
           </View>
@@ -151,21 +157,21 @@ export default function DonorDashboard() {
 
         {donorStatus === 'not_a_donor' && (
           <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-            <IconSymbol name="person.badge.plus" size={24} color="#FFFFFF" />
-            <Text style={styles.registerButtonText}>Register as Donor</Text>
+            <IconSymbol name="person.badge.plus" size={24} color={semanticColors.textInverse} />
+            <Text style={[styles.registerButtonText, { color: semanticColors.textInverse }]}>Register as Donor</Text>
           </TouchableOpacity>
         )}
 
         {/* Switch Role */}
         <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchToRequester} disabled={switching}>
-          <IconSymbol name="arrow.right.arrow.left.circle.fill" size={20} color="#FFFFFF" />
-          <Text style={styles.switchBtnText}>{switching ? 'Switching...' : 'Switch to Requester'}</Text>
+          <IconSymbol name="arrow.right.arrow.left.circle.fill" size={20} color={semanticColors.textInverse} />
+          <Text style={[styles.switchBtnText, { color: semanticColors.textInverse }]}>{switching ? 'Switching...' : 'Switch to Requester'}</Text>
         </TouchableOpacity>
 
         {/* Status Card */}
         <View style={styles.statusCard}>
           <Text style={styles.statusTitle}>My Status</Text>
-          <Text style={[styles.statusValue, donorStatus === 'unavailable' && { color: colors.error }]}>{statusBadge}</Text>
+          <Text style={[styles.statusValue, donorStatus === 'unavailable' && { color: semanticColors.interactiveDanger }]}>{statusBadge}</Text>
           <View style={styles.statusRow}><Text style={styles.statusLabel}>Last Donation:</Text><Text style={styles.statusText}>{lastDonationDate ? lastDonationDate.toLocaleDateString() : '—'}</Text></View>
           <View style={styles.statusRow}><Text style={styles.statusLabel}>Next Eligibility:</Text><Text style={styles.statusText}>{unavailableUntil ? unavailableUntil.toLocaleDateString() : '—'}</Text></View>
           {donorStatus === 'ineligible' && ineligibilityReason && (
@@ -179,8 +185,8 @@ export default function DonorDashboard() {
 
         {/* Quick Access to Matched Requests */}
         <TouchableOpacity style={styles.matchesButton} onPress={handleViewMatches}>
-          <IconSymbol name="bell" size={22} color="#FFFFFF" />
-          <Text style={styles.matchesButtonText}>View Matched Requests</Text>
+          <IconSymbol name="bell" size={22} color={semanticColors.textInverse} />
+          <Text style={[styles.matchesButtonText, { color: semanticColors.textInverse }]}>View Matched Requests</Text>
         </TouchableOpacity>
 
         {/* Donation History */}
@@ -189,19 +195,19 @@ export default function DonorDashboard() {
           <View style={styles.requirementsCard}>
             {loadingHistory && (
               <View style={styles.requirementItem}>
-                <IconSymbol name="clock" size={20} color={colors.textSecondary} />
+                <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
                 <Text style={styles.requirementText}>Loading history...</Text>
               </View>
             )}
             {!loadingHistory && historyError && (
               <View style={styles.requirementItem}>
-                <IconSymbol name="exclamationmark.triangle.fill" size={20} color={colors.error} />
+                <IconSymbol name="exclamationmark.triangle.fill" size={20} color={semanticColors.interactiveDanger} />
                 <Text style={styles.requirementText}>{historyError}</Text>
               </View>
             )}
             {!loadingHistory && !historyError && history.length === 0 && (
               <View style={styles.requirementItem}>
-                <IconSymbol name="clock" size={20} color={colors.textSecondary} />
+                <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
                 <Text style={styles.requirementText}>No donation records yet.</Text>
               </View>
             )}
@@ -211,7 +217,7 @@ export default function DonorDashboard() {
               const screening = h.screeningClear === true ? 'Cleared' : h.screeningClear === false ? 'Pending' : '';
               return (
                 <View key={i} style={styles.requirementItem}>
-                  <IconSymbol name="heart.fill" size={20} color={colors.primary} />
+                  <IconSymbol name="heart.fill" size={20} color={semanticColors.interactivePrimary} />
                   <Text style={styles.requirementText}>{dt} · {vol}{screening ? ` · ${screening}` : ''}</Text>
                 </View>
               );
@@ -226,7 +232,7 @@ export default function DonorDashboard() {
             {features.map((feature, index) => (
               <View key={index} style={styles.featureCard}>
                 <View style={[styles.featureIcon, { backgroundColor: feature.color }]}>
-                  <IconSymbol name={feature.icon as any} size={24} color="#FFFFFF" />
+                  <IconSymbol name={feature.icon as any} size={24} color={semanticColors.textInverse} />
                 </View>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
                 <Text style={styles.featureDescription}>{feature.description}</Text>
@@ -241,7 +247,7 @@ export default function DonorDashboard() {
           <View style={styles.requirementsCard}>
             {requirements.map((requirement, index) => (
               <View key={index} style={styles.requirementItem}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.success} />
+                <IconSymbol name="checkmark.circle.fill" size={20} color={colorsBase.palette.success} />
                 <Text style={styles.requirementText}>{requirement}</Text>
               </View>
             ))}
@@ -254,7 +260,7 @@ export default function DonorDashboard() {
           <View style={styles.processSteps}>
             <View style={styles.processStep}>
               <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>1</Text>
+                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>1</Text>
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Registration</Text>
@@ -264,7 +270,7 @@ export default function DonorDashboard() {
             
             <View style={styles.processStep}>
               <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>2</Text>
+                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>2</Text>
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Health Screening</Text>
@@ -274,7 +280,7 @@ export default function DonorDashboard() {
             
             <View style={styles.processStep}>
               <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>3</Text>
+                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>3</Text>
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Donation</Text>
@@ -284,7 +290,7 @@ export default function DonorDashboard() {
             
             <View style={styles.processStep}>
               <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>4</Text>
+                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>4</Text>
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Recovery</Text>
@@ -301,7 +307,7 @@ export default function DonorDashboard() {
               Your donation can help up to 3 patients in need. Register today and become a hero.
             </Text>
             <TouchableOpacity style={styles.ctaButton} onPress={handleRegister}>
-              <Text style={styles.ctaButtonText}>Start Registration</Text>
+              <Text style={[styles.ctaButtonText, { color: semanticColors.textInverse }]}>Start Registration</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -310,10 +316,10 @@ export default function DonorDashboard() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: semanticColors.bgAlt,
   },
   scrollView: {
     flex: 1,
@@ -331,7 +337,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    backgroundColor: colors.primary,
+    backgroundColor: semanticColors.interactivePrimary,
     marginBottom: 16,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -345,13 +351,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '800' },
-  headerSubtitle: { color: '#FFE9EF', fontSize: 13, fontWeight: '500', marginTop: 2 },
+  headerTitle: { color: semanticColors.textInverse, fontSize: 20, fontWeight: '800' },
+  headerSubtitle: { color: semanticColors.textInverse, fontSize: 13, fontWeight: '500', marginTop: 2, opacity: 0.9 },
   heroIcon: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.highlight,
+    backgroundColor: colorsBase.palette.brandSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -359,18 +365,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   registerButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: semanticColors.interactivePrimary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -381,7 +387,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   switchBtn: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colorsBase.palette.info,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -390,32 +396,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   switchBtnText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 8,
   },
   statusCard: {
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: semanticColors.borderSubtle,
     marginBottom: 24,
   },
-  statusTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  statusValue: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 12 },
+  statusTitle: { fontSize: 18, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+  statusValue: { fontSize: 16, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 12 },
   statusRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  statusLabel: { fontSize: 14, color: colors.textSecondary },
-  statusText: { fontSize: 14, color: colors.text },
+  statusLabel: { fontSize: 14, color: semanticColors.textSecondary },
+  statusText: { fontSize: 14, color: semanticColors.textPrimary },
   registerButtonText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
   },
   matchesButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colorsBase.palette.info,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -426,7 +432,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   matchesButtonText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -437,7 +443,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
+    color: semanticColors.textPrimary,
     marginBottom: 16,
   },
   featuresGrid: {
@@ -446,7 +452,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   featureCard: {
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 20,
     width: '48%',
@@ -454,6 +460,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 4,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
   },
   featureIcon: {
     width: 48,
@@ -466,22 +474,24 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   featureDescription: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   requirementsCard: {
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 20,
     boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 4,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
   },
   requirementItem: {
     flexDirection: 'row',
@@ -490,16 +500,18 @@ const styles = StyleSheet.create({
   },
   requirementText: {
     fontSize: 16,
-    color: colors.text,
+    color: semanticColors.textPrimary,
     marginLeft: 12,
     flex: 1,
   },
   processSteps: {
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 20,
     boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 4,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
   },
   processStep: {
     flexDirection: 'row',
@@ -510,13 +522,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary,
+    backgroundColor: semanticColors.interactivePrimary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   stepNumberText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -526,47 +538,49 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: semanticColors.textPrimary,
     marginBottom: 4,
   },
   stepDescription: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
   },
   ctaSection: {
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 4,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
   },
   ctaTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   ctaText: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 20,
   },
   ctaButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colorsBase.palette.info,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
   },
   ctaButtonText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
-  ineligibleHeading: { fontSize: 14, fontWeight: '700', color: colors.error, marginBottom: 4 },
-  ineligibleText: { fontSize: 14, color: colors.error, marginBottom: 6 },
-  ineligibleHint: { fontSize: 12, color: colors.textSecondary },
+  ineligibleHeading: { fontSize: 14, fontWeight: '700', color: semanticColors.interactiveDanger, marginBottom: 4 },
+  ineligibleText: { fontSize: 14, color: semanticColors.interactiveDanger, marginBottom: 6 },
+  ineligibleHint: { fontSize: 12, color: semanticColors.textSecondary },
 });

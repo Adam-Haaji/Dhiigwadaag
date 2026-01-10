@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
   // Optional: Expo push tokens for this user (can have multiple devices)
   expoPushTokens: { type: [String], default: [] },
 
+  // Notification preferences
+  pushNotificationsEnabled: { type: Boolean, default: true },
+  emailNotificationsEnabled: { type: Boolean, default: true },
+
 }, { timestamps: true });
 
 // Normalize inputs

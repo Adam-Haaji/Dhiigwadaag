@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, Alert, ActivityIndicator } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
+import { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 import apiClient from '@/service/api';
 
 function normalizePhone(raw?: string): string {
@@ -14,6 +17,7 @@ function normalizePhone(raw?: string): string {
 
 export default function DonorDetail() {
   const params = useLocalSearchParams();
+  const { isDark } = useTheme();
   const id = params.id ? String(params.id) : '';
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any | null>(null);
@@ -45,10 +49,18 @@ export default function DonorDetail() {
     return () => { mounted = false; };
   }, [id]);
 
-  const name = (profile?.name ?? fallback.name) as string;
-  const bloodType = (profile?.bloodType ?? fallback.bloodType) as string;
-  const location = (profile?.location ?? fallback.location) as string;
-  const availability = Boolean(profile?.availability ?? fallback.availability);
+  const name = (
+    profile?.fullName || profile?.name || fallback.name
+  ) as string;
+  const bloodType = (
+    profile?.bloodGroup || profile?.bloodType || fallback.bloodType
+  ) as string;
+  const location = (
+    profile?.district || profile?.location || fallback.location
+  ) as string;
+  const availability = Boolean(
+    (profile?.availabilityStatus ? String(profile.availabilityStatus).toLowerCase() === 'available' : profile?.availability) ?? fallback.availability
+  );
   const phoneRaw = (profile?.phone ?? fallback.phone) as string;
   const phone = useMemo(() => normalizePhone(phoneRaw), [phoneRaw]);
 
@@ -80,6 +92,7 @@ export default function DonorDetail() {
 
   return (
     <SafeAreaView style={s.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {Platform.OS === 'ios' && (
         <Stack.Screen options={{ title: 'Donor Details' }} />
       )}
@@ -97,7 +110,7 @@ export default function DonorDetail() {
 
         <View style={s.rowButtons}>
           <TouchableOpacity style={[s.button, !phone && s.buttonDisabled]} onPress={handleContact} disabled={!phone}>
-            <Text style={s.buttonText}>Contact</Text>
+            <Text style={[s.buttonText, { color: semanticColors.textInverse }]}>Contact</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.buttonSecondary, !phone && s.buttonSecondaryDisabled]} onPress={handleMessage} disabled={!phone}>
             <Text style={s.buttonSecondaryText}>Message</Text>
@@ -117,7 +130,7 @@ const s = StyleSheet.create({
   rowButtons: { flexDirection: 'row', gap: 12, marginTop: 16 },
   button: { flex: 1, backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   buttonDisabled: { backgroundColor: colors.textSecondary },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  buttonText: { fontWeight: '700', fontSize: 16 },
   buttonSecondary: { flex: 1, backgroundColor: colors.card, paddingVertical: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   buttonSecondaryDisabled: { opacity: 0.6 },
   buttonSecondaryText: { color: colors.text, fontWeight: '700', fontSize: 16 },

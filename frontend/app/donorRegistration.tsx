@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, Keyboard, Modal } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { commonStyles } from '@/styles/commonStyles';
+import { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 import api from "../service/api";
 import useAuth from "@/hooks/useAuth";
 import SelectField from '../components/SelectField';
@@ -12,6 +15,7 @@ import { LOCATION_OPTIONS } from '@/constants/locations';
 
 export default function DonorRegistration() {
   const { setUser, user } = useAuth();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({
     fullName: '',
@@ -227,11 +231,46 @@ export default function DonorRegistration() {
   const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 0 : 84;
   const bottomOffset = (keyboardHeight > 0 ? keyboardHeight : TAB_BAR_HEIGHT) + insets.bottom + 12;
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle, backgroundColor: semanticColors.bgElevated },
+    backButton: { padding: 8 },
+    headerTitle: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary },
+    placeholder: { width: 40 },
+    scrollView: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingVertical: 20 },
+    card: { backgroundColor: semanticColors.bgSurface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    cardTitle: { fontSize: 20, fontWeight: '800', color: semanticColors.interactivePrimary, marginBottom: 4 },
+    cardSub: { color: semanticColors.textSecondary, marginBottom: 16 },
+    inputGroup: { marginBottom: 16 },
+    inputLabel: { fontSize: 16, fontWeight: '500', color: semanticColors.textPrimary, marginBottom: 12 },
+    dropdownButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    dropdownPanel: { backgroundColor: semanticColors.bgSurface, borderWidth: 1, borderColor: semanticColors.borderSubtle, borderRadius: 8, marginTop: 8, overflow: 'hidden' },
+    dropdownItem: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle },
+    dropdownText: { fontSize: 14, color: semanticColors.textPrimary },
+    dropdownTextSelected: { fontWeight: '700', color: semanticColors.interactivePrimary },
+    registerBtn: { backgroundColor: semanticColors.interactivePrimary, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 8 },
+    registerBtnText: { fontSize: 16, fontWeight: '700' },
+    dateInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    dateText: { color: semanticColors.textPrimary, fontSize: 16 },
+    datePlaceholder: { color: semanticColors.textSecondary },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    modalSheet: { backgroundColor: semanticColors.bgSurface, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderColor: semanticColors.borderSubtle, borderTopWidth: 1 },
+    modalDoneBtn: { marginTop: 12, alignSelf: 'flex-end', backgroundColor: semanticColors.interactivePrimary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+    modalDoneText: { fontWeight: '700' },
+    errorText: { color: semanticColors.interactiveDanger, marginTop: 6, fontSize: 13 },
+    ineligibleBox: { marginTop: 16, padding: 12, borderRadius: 10, backgroundColor: semanticColors.bgElevated, borderWidth: 1, borderColor: semanticColors.interactiveDanger },
+    ineligibleTitle: { fontWeight: '700', color: semanticColors.interactiveDanger, marginBottom: 4 },
+    ineligibleReason: { color: semanticColors.interactiveDanger, marginBottom: 6 },
+    ineligibleHint: { color: semanticColors.textSecondary, fontSize: 12 },
+  }), [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+          <IconSymbol name="chevron.left" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Donor Registration</Text>
         <View style={styles.placeholder} />
@@ -247,9 +286,13 @@ export default function DonorRegistration() {
           <Text style={styles.cardSub}>Complete your donor profile</Text>
 
           <TextInput
-            style={[commonStyles.input, focusedField === 'fullName' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'fullName' && commonStyles.inputFocused
+            ]}
             placeholder="Full Name *"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.fullName}
             onChangeText={(value) => updateFormData('fullName', value)}
             onFocus={() => setFocusedField('fullName')}
@@ -258,9 +301,13 @@ export default function DonorRegistration() {
           {validationErrors.fullName && <Text style={styles.errorText}>{validationErrors.fullName}</Text>}
 
           <TextInput
-            style={[commonStyles.input, focusedField === 'email' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'email' && commonStyles.inputFocused
+            ]}
             placeholder="Email Address *"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.email}
             onChangeText={(value) => updateFormData('email', value)}
             onFocus={() => setFocusedField('email')}
@@ -292,9 +339,13 @@ export default function DonorRegistration() {
           </View>
 
           <TextInput
-            style={[commonStyles.input, focusedField === 'phone' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'phone' && commonStyles.inputFocused
+            ]}
             placeholder="Phone Number *"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.phone}
             onChangeText={(value) => updateFormData('phone', value)}
             onFocus={() => setFocusedField('phone')}
@@ -315,9 +366,13 @@ export default function DonorRegistration() {
 
           <Text style={styles.inputLabel}>Age *</Text>
           <TextInput
-            style={[commonStyles.input, focusedField === 'age' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'age' && commonStyles.inputFocused
+            ]}
             placeholder="Enter your age"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.age}
             onChangeText={(v) => updateFormData('age', v.replace(/[^0-9]/g, '').slice(0, 3))}
             onFocus={() => setFocusedField('age')}
@@ -329,9 +384,13 @@ export default function DonorRegistration() {
 
           <Text style={styles.inputLabel}>Weight (kg)</Text>
           <TextInput
-            style={[commonStyles.input, focusedField === 'weightKg' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'weightKg' && commonStyles.inputFocused
+            ]}
             placeholder="Weight"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.weightKg}
             onChangeText={(v) => updateFormData('weightKg', v)}
             onFocus={() => setFocusedField('weightKg')}
@@ -342,9 +401,13 @@ export default function DonorRegistration() {
 
           <Text style={styles.inputLabel}>Hemoglobin (HB)</Text>
           <TextInput
-            style={[commonStyles.input, focusedField === 'hb' && commonStyles.inputFocused]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary },
+              focusedField === 'hb' && commonStyles.inputFocused
+            ]}
             placeholder="HB g/dL"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={formData.hb}
             onChangeText={(v) => updateFormData('hb', v.replace(/[^0-9.]/g,'').slice(0,5))}
             onFocus={() => setFocusedField('hb')}
@@ -355,14 +418,18 @@ export default function DonorRegistration() {
 
           <Text style={styles.inputLabel}>Last Donation Date</Text>
           <TouchableOpacity
-            style={[commonStyles.input, styles.dateInput]}
+            style={[
+              commonStyles.input,
+              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle },
+              styles.dateInput
+            ]}
             activeOpacity={0.7}
             onPress={openDatePicker}
           >
             <Text style={[styles.dateText, !formData.lastDonationDate && styles.datePlaceholder]}>
               {formData.lastDonationDate ? formatDisplayDate(formData.lastDonationDate) : 'mm/dd/yyyy'}
             </Text>
-            <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
+            <IconSymbol name="calendar" size={18} color={semanticColors.textSecondary} />
           </TouchableOpacity>
             <View style={styles.inputGroup}>
               <SelectField
@@ -380,7 +447,7 @@ export default function DonorRegistration() {
               activeOpacity={isValid && !submitting ? 0.7 : 1}
               onPress={isValid && !submitting ? handleNext : undefined}
             >
-              <Text style={styles.registerBtnText}>{submitting ? 'Submitting...' : 'Register'}</Text>
+              <Text style={[styles.registerBtnText, { color: semanticColors.textInverse }]}>{submitting ? 'Submitting...' : 'Register'}</Text>
             </TouchableOpacity>
 
             {validationErrors.cooldown && <Text style={styles.errorText}>{validationErrors.cooldown}</Text>}
@@ -417,14 +484,14 @@ export default function DonorRegistration() {
                   );
                 } catch (e) {
                   return (
-                    <Text style={{ color: colors.text }}>
+                    <Text style={{ color: semanticColors.textPrimary }}>
                       Date picker is not available. Install &quot;@react-native-community/datetimepicker&quot; to enable native selection.
                     </Text>
                   );
                 }
               })()}
               <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowIOSDatePicker(false)}>
-                <Text style={styles.modalDoneText}>Done</Text>
+                <Text style={[styles.modalDoneText, { color: semanticColors.textInverse }]}>Done</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -434,36 +501,4 @@ export default function DonorRegistration() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
-  placeholder: { width: 40 },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingVertical: 20 },
-  card: { backgroundColor: colors.card, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: colors.border },
-  cardTitle: { fontSize: 20, fontWeight: '800', color: colors.primary, marginBottom: 4 },
-  cardSub: { color: colors.textSecondary, marginBottom: 16 },
-  inputGroup: { marginBottom: 16 },
-  inputLabel: { fontSize: 16, fontWeight: '500', color: colors.text, marginBottom: 12 },
-  dropdownButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownPanel: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 8, marginTop: 8, overflow: 'hidden' },
-  dropdownItem: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
-  dropdownText: { fontSize: 14, color: colors.text },
-  dropdownTextSelected: { fontWeight: '700', color: colors.primary },
-  registerBtn: { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 8 },
-  registerBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  dateInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dateText: { color: colors.text, fontSize: 16 },
-  datePlaceholder: { color: colors.textSecondary },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderColor: colors.border, borderTopWidth: 1 },
-  modalDoneBtn: { marginTop: 12, alignSelf: 'flex-end', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  modalDoneText: { color: '#fff', fontWeight: '700' },
-  errorText: { color: colors.error, marginTop: 6, fontSize: 13 },
-  ineligibleBox: { marginTop: 16, padding: 12, borderRadius: 10, backgroundColor: '#ffe6e6', borderWidth: 1, borderColor: colors.error },
-  ineligibleTitle: { fontWeight: '700', color: colors.error, marginBottom: 4 },
-  ineligibleReason: { color: colors.error, marginBottom: 6 },
-  ineligibleHint: { color: colors.textSecondary, fontSize: 12 },
-});
+ 

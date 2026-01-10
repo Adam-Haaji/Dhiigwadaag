@@ -23,9 +23,9 @@ const ForgotPassword = () => {
     }
     setLoading(true);
     setError(null);
-    // If you have a backend endpoint, call it here.
-    // For now, just navigate to ResetPassword with the email.
-    router.push({ pathname: '/resetPassword', params: { email: trimmed } });
+    // If you have a backend endpoint, call it here to send the code.
+    // Navigate to verification screen with the email to enter the 6-digit code.
+    router.push({ pathname: '/verification', params: { email: trimmed } });
     setLoading(false);
   };
 
@@ -37,7 +37,7 @@ const ForgotPassword = () => {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: semanticColors.textPrimary }]}>Forgot Password?</Text>
-            <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Enter your email address and we&apos;ll send you a link to reset your password.</Text>
+            <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Enter your email address and we&apos;ll send you a code to verify your Email.</Text>
           </View>
 
           <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }]}>
@@ -61,7 +61,7 @@ const ForgotPassword = () => {
               accessibilityRole="button"
               disabled={!isValidEmail(email) || loading}
             >
-              <Text style={styles.resetButtonText}>{loading ? 'Sending…' : 'Send Reset'}</Text>
+              <Text style={styles.resetButtonText}>{loading ? 'Sending…' : 'Send code'}</Text>
             </TouchableOpacity>
 
             <View style={styles.loginContainer}>

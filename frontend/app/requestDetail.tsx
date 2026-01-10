@@ -1,14 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import apiClient from '../service/api';
-import { colors } from '@/styles/commonStyles';
 import useAuthHook from '@/hooks/useAuth';
+import colorsBase, { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params?.id as string | undefined;
+  const { isDark } = useTheme();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,11 +109,44 @@ export default function RequestDetail() {
     }
   };
 
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+        center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+        content: { padding: 20 },
+        card: {
+          backgroundColor: semanticColors.bgSurface,
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 12,
+          position: 'relative',
+          borderWidth: 1,
+          borderColor: semanticColors.borderSubtle,
+        },
+        title: { fontSize: 18, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+        section: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+        row: { fontSize: 14, color: semanticColors.textPrimary, marginBottom: 4 },
+        bold: { fontWeight: '700', color: semanticColors.textPrimary },
+        error: { color: semanticColors.interactiveDanger },
+        actionsCol: { gap: 12, marginTop: 4 },
+        actionBtnFull: { width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+        actionTxt: { color: semanticColors.textInverse, fontWeight: '700' },
+        cta: { backgroundColor: semanticColors.interactivePrimary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 12 },
+        ctaText: { color: semanticColors.textInverse, fontWeight: '700' },
+        badge: { position: 'absolute', right: 12, top: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
+        badgeText: { color: semanticColors.textInverse, fontWeight: '700', fontSize: 12 },
+        statusText: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+      }),
+    [isDark]
+  );
+
   return (
     <SafeAreaView style={s.container}>
       <Stack.Screen options={{ title: 'Request Details', headerShown: true }} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {loading && (
-        <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
+        <View style={s.center}><ActivityIndicator color={semanticColors.interactivePrimary} /></View>
       )}
       {!loading && error && (
         <View style={s.center}><Text style={s.error}>{error}</Text></View>
@@ -132,8 +168,8 @@ export default function RequestDetail() {
             <Text style={s.row}>Status: <Text style={s.bold}>{data.status}</Text></Text>
             {String(data.status || '').toLowerCase() === 'matched' && data.__requesterView && (
               <View style={{ marginTop: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{data.__requesterView.title}</Text>
-                <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>{data.__requesterView.message}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: semanticColors.textPrimary }}>{data.__requesterView.title}</Text>
+                <Text style={{ fontSize: 13, color: semanticColors.textSecondary, marginTop: 4 }}>{data.__requesterView.message}</Text>
                 {data.__requesterView.donor && (
                   <>
                     <Text style={s.row}>Donor Blood Type: <Text style={s.bold}>{data.__requesterView.donor.bloodType}</Text></Text>
@@ -160,7 +196,7 @@ export default function RequestDetail() {
           )}
 
           <View style={s.actionsCol}>
-            <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: colors.success }]} disabled={submitting} onPress={callRequester}>
+            <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: colorsBase.palette.success }]} disabled={submitting} onPress={callRequester}>
               <Text style={s.actionTxt}>Call Requester</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: '#25D366' }]} disabled={submitting} onPress={whatsappRequester}>
@@ -168,7 +204,7 @@ export default function RequestDetail() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={[s.cta, { backgroundColor: '#E53935' }]} disabled={submitting} onPress={() => handleResponse('donate')}>
+          <TouchableOpacity style={[s.cta, { backgroundColor: colorsBase.primary }]} disabled={submitting} onPress={() => handleResponse('donate')}>
             <Text style={s.ctaText}>I Can Donate</Text>
           </TouchableOpacity>
 
@@ -178,7 +214,7 @@ export default function RequestDetail() {
             const isMatchedDonorUser = matchedUserId && userId && String(matchedUserId) === String(userId);
             return (v && isMatchedDonorUser);
           })() && (
-            <TouchableOpacity style={[s.cta, { backgroundColor: '#2E7D32' }]} disabled={submitting} onPress={handleDonorFulfill}>
+            <TouchableOpacity style={[s.cta, { backgroundColor: colorsBase.palette.success }]} disabled={submitting} onPress={handleDonorFulfill}>
               <Text style={s.ctaText}>I Have Donated</Text>
             </TouchableOpacity>
           )}
@@ -202,7 +238,7 @@ export default function RequestDetail() {
                   setSubmitting(false);
                 }
               }}
-              style={{ backgroundColor: '#4CAF50', padding: 14, borderRadius: 10, marginTop: 10 }}
+              style={{ backgroundColor: colorsBase.palette.success, padding: 14, borderRadius: 10, marginTop: 10 }}
             >
               <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>Mark as Fulfilled</Text>
             </TouchableOpacity>
@@ -227,7 +263,7 @@ export default function RequestDetail() {
                   setSubmitting(false);
                 }
               }}
-              style={{ backgroundColor: '#B71C1C', padding: 14, borderRadius: 10, marginTop: 10 }}
+              style={{ backgroundColor: colorsBase.palette.danger, padding: 14, borderRadius: 10, marginTop: 10 }}
             >
               <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>Cancel Request</Text>
             </TouchableOpacity>
@@ -238,43 +274,23 @@ export default function RequestDetail() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 20 },
-  card: { backgroundColor: colors.card, padding: 16, borderRadius: 12, marginBottom: 12, position: 'relative' },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  section: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  row: { fontSize: 14, color: colors.text, marginBottom: 4 },
-  bold: { fontWeight: '700' },
-  error: { color: '#E74C3C' },
-  actionsCol: { gap: 12, marginTop: 4 },
-  actionBtnFull: { width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  actionTxt: { color: '#fff', fontWeight: '700' },
-  cta: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 12 },
-  ctaText: { color: '#fff', fontWeight: '700' },
-  badge: { position: 'absolute', right: 12, top: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
-  badgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  statusText: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
-});
-
 function badgeStyle(status?: string) {
-  const base = { backgroundColor: '#9E9E9E' } as any;
+  const base = { backgroundColor: colorsBase.palette.gray500 } as any;
   switch ((status || '').toLowerCase()) {
-    case 'pending': return { backgroundColor: '#9E9E9E' };
-    case 'contacted': return { backgroundColor: '#1976D2' };
-    case 'matched': return { backgroundColor: '#2E7D32' };
+    case 'pending': return { backgroundColor: colorsBase.palette.gray500 };
+    case 'contacted': return { backgroundColor: colorsBase.palette.info };
+    case 'matched': return { backgroundColor: colorsBase.palette.success };
     case 'fulfilled': return { backgroundColor: '#6A1B9A' };
-    case 'cancelled': return { backgroundColor: '#B71C1C' };
+    case 'cancelled': return { backgroundColor: colorsBase.palette.danger };
     default: return base;
   }
 }
 
 function statusColor(status?: string) {
   const v = (status || '').toLowerCase();
-  if (v === 'fulfilled') return '#2E7D32';
-  if (v === 'matched') return '#F39C12';
-  if (v === 'contacted') return '#1976D2';
-  if (v === 'cancelled') return '#B71C1C';
-  return '#9E9E9E';
+  if (v === 'fulfilled') return colorsBase.palette.success;
+  if (v === 'matched') return colorsBase.palette.warning;
+  if (v === 'contacted') return colorsBase.palette.info;
+  if (v === 'cancelled') return colorsBase.palette.danger;
+  return colorsBase.palette.gray500;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Switch, Image, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, router } from "expo-router";
@@ -6,25 +6,269 @@ import { IconSymbol } from "@/components/IconSymbol";
 import apiClient from "../../service/api";
 import * as ImagePicker from 'expo-image-picker';
 import useAuthHook from "../../hooks/useAuth";
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 
-const colors = {
-  background: "#F5F7FA",
-  text: "#1F2937",
-  textSecondary: "#6B7280",
-  card: "#FFFFFF",
-  primary: "#E74C3C",
-  secondary: "#3498DB",
-  success: "#28A745",
-  error: "#E74C3C",
-  grey: "#D1D5DB",
-  border: "#E5E7EB",
-};
 
 export default function ProfileScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [userProfile, setUserProfile] = useState<any>({});
   const { logout } = useAuthHook();
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
+  const { isDark } = useTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: semanticColors.bgAlt,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingVertical: 20,
+    },
+    scrollContentWithTabBar: {
+      paddingBottom: 100,
+    },
+    headerGradient: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 24,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+      backgroundColor: semanticColors.interactivePrimary,
+      marginBottom: 16,
+    },
+    headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    headerLeft: { flexDirection: 'row', alignItems: 'center' },
+    headerIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    headerTitle: { color: semanticColors.textInverse, fontSize: 20, fontWeight: '800' },
+    headerSubtitle: { color: semanticColors.textInverse, fontSize: 13, fontWeight: '500', marginTop: 2 },
+    profileHeader: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: 20,
+      padding: 24,
+      alignItems: 'center',
+      marginBottom: 20,
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+      elevation: 4,
+    },
+    avatarContainer: {
+      position: 'relative',
+      marginBottom: 16,
+    },
+    avatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: semanticColors.interactivePrimary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    avatarImage: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: semanticColors.interactivePrimary,
+    },
+    avatarText: {
+      fontSize: 36,
+      fontWeight: '700',
+      color: semanticColors.textInverse,
+    },
+    editAvatarButton: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: semanticColors.interactivePrimaryActive,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 3,
+      borderColor: semanticColors.bgSurface,
+    },
+    name: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: semanticColors.textPrimary,
+      marginBottom: 4,
+    },
+    email: {
+      fontSize: 16,
+      color: semanticColors.textSecondary,
+      marginBottom: 16,
+    },
+    bloodTypeContainer: {
+      alignItems: 'center',
+    },
+    bloodTypeBadge: {
+      backgroundColor: semanticColors.interactivePrimary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+    },
+    bloodTypeText: {
+      color: semanticColors.textInverse,
+      fontSize: 18,
+      fontWeight: '700',
+      marginLeft: 8,
+    },
+    availabilityCard: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+      elevation: 4,
+    },
+    availabilityHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    availabilityInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+    availabilityText: {
+      marginLeft: 12,
+      flex: 1,
+    },
+    availabilityTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: semanticColors.textPrimary,
+      marginBottom: 4,
+    },
+    availabilitySubtitle: {
+      fontSize: 14,
+      color: semanticColors.textSecondary,
+    },
+    infoCard: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+      elevation: 4,
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: semanticColors.textPrimary,
+      marginBottom: 16,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: semanticColors.borderSubtle,
+    },
+    infoContent: {
+      marginLeft: 16,
+      flex: 1,
+    },
+    infoLabel: {
+      fontSize: 14,
+      color: semanticColors.textSecondary,
+      marginBottom: 4,
+    },
+    infoValue: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: semanticColors.textPrimary,
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statNumber: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: semanticColors.interactivePrimary,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: semanticColors.textSecondary,
+      textAlign: 'center',
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      marginBottom: 20,
+      gap: 12,
+    },
+    primaryButton: {
+      backgroundColor: semanticColors.interactivePrimary,
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 16,
+      borderRadius: 12,
+      boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
+      elevation: 4,
+    },
+    primaryButtonText: {
+      color: semanticColors.textInverse,
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+    secondaryButton: {
+      backgroundColor: semanticColors.bgSurface,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 16,
+      borderRadius: 12,
+    },
+    secondaryButtonText: {
+      color: semanticColors.textPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+    logoutButton: {
+      backgroundColor: semanticColors.bgSurface,
+      borderWidth: 1,
+      borderColor: semanticColors.interactiveDanger,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 16,
+      borderRadius: 12,
+    },
+    logoutButtonText: {
+      color: semanticColors.interactiveDanger,
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+  }), [isDark]);
 
   useEffect(() => {
     (async () => {
@@ -51,12 +295,13 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {Platform.OS === 'ios' && (
         <Stack.Screen
           options={{
             title: "Profile",
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
+            headerStyle: { backgroundColor: semanticColors.bgAlt },
+            headerTintColor: semanticColors.textPrimary,
           }}
         />
       )}
@@ -74,7 +319,7 @@ export default function ProfileScreen() {
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
-                <IconSymbol name="person.fill" size={18} color="#FFFFFF" />
+                <IconSymbol name="person.fill" size={18} color={semanticColors.textInverse} />
               </View>
               <View>
                 <Text style={styles.headerTitle}>Profile</Text>
@@ -116,10 +361,10 @@ export default function ProfileScreen() {
                 setUpdatingAvatar(false);
               }
             }}>
-              <IconSymbol name="camera.fill" size={16} color="#FFFFFF" />
+              <IconSymbol name="camera.fill" size={16} color={semanticColors.textInverse} />
             </TouchableOpacity>
             {userProfile?.avatarUrl ? (
-              <TouchableOpacity style={[styles.editAvatarButton, { right: 40, backgroundColor: colors.error }]} onPress={async () => {
+              <TouchableOpacity style={[styles.editAvatarButton, { right: 40, backgroundColor: semanticColors.interactiveDanger }]} onPress={async () => {
                 try {
                   setUpdatingAvatar(true);
                   await apiClient.updateMe({ avatarUrl: '' });
@@ -131,7 +376,7 @@ export default function ProfileScreen() {
                   setUpdatingAvatar(false);
                 }
               }}>
-                <IconSymbol name="trash" size={16} color="#FFFFFF" />
+                <IconSymbol name="trash" size={16} color={semanticColors.textInverse} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -141,7 +386,7 @@ export default function ProfileScreen() {
           
           <View style={styles.bloodTypeContainer}>
             <View style={styles.bloodTypeBadge}>
-              <IconSymbol name="drop.fill" size={20} color="#FFFFFF" />
+              <IconSymbol name="drop.fill" size={20} color={semanticColors.textInverse} />
               <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
             </View>
           </View>
@@ -154,7 +399,7 @@ export default function ProfileScreen() {
               <IconSymbol 
                 name={isAvailable ? "checkmark.circle.fill" : "xmark.circle.fill"} 
                 size={24} 
-                color={isAvailable ? colors.success : colors.error} 
+                color={isAvailable ? semanticColors.interactivePrimary : semanticColors.interactiveDanger} 
               />
               <View style={styles.availabilityText}>
                 <Text style={styles.availabilityTitle}>Available to Donate</Text>
@@ -166,8 +411,8 @@ export default function ProfileScreen() {
             <Switch
               value={isAvailable}
               onValueChange={setIsAvailable}
-              trackColor={{ false: colors.grey, true: colors.success }}
-              thumbColor={isAvailable ? '#FFFFFF' : '#FFFFFF'}
+              trackColor={{ false: semanticColors.borderSubtle, true: semanticColors.interactivePrimary }}
+              thumbColor={semanticColors.textInverse}
             />
           </View>
         </View>
@@ -177,7 +422,7 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Personal Information</Text>
           
           <View style={styles.infoRow}>
-            <IconSymbol name="person.fill" size={20} color={colors.primary} />
+            <IconSymbol name="person.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Full Name</Text>
               <Text style={styles.infoValue}>{userProfile.name}</Text>
@@ -185,7 +430,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <IconSymbol name="envelope.fill" size={20} color={colors.primary} />
+            <IconSymbol name="envelope.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
               <Text style={styles.infoValue}>{userProfile.email}</Text>
@@ -193,7 +438,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <IconSymbol name="phone.fill" size={20} color={colors.primary} />
+            <IconSymbol name="phone.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Phone</Text>
               <Text style={styles.infoValue}>{userProfile.phone}</Text>
@@ -201,7 +446,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <IconSymbol name="drop.fill" size={20} color={colors.primary} />
+            <IconSymbol name="drop.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Blood Type</Text>
               <Text style={styles.infoValue}>{userProfile.bloodType}</Text>
@@ -209,7 +454,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <IconSymbol name="location.fill" size={20} color={colors.primary} />
+            <IconSymbol name="location.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Location</Text>
               <Text style={styles.infoValue}>{userProfile.location}</Text>
@@ -240,19 +485,19 @@ export default function ProfileScreen() {
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.primaryButton} onPress={handleEditProfile}>
-            <IconSymbol name="pencil" size={20} color="#FFFFFF" />
+            <IconSymbol name="pencil" size={20} color={semanticColors.textInverse} />
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryButton} onPress={handleSettings}>
-            <IconSymbol name="gear" size={20} color={colors.text} />
+            <IconSymbol name="gear" size={20} color={semanticColors.textPrimary} />
             <Text style={styles.secondaryButtonText}>Settings</Text>
           </TouchableOpacity>
         </View>
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <IconSymbol name="arrow.right.square" size={20} color={colors.error} />
+          <IconSymbol name="arrow.right.square" size={20} color={semanticColors.interactiveDanger} />
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -260,254 +505,4 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  scrollContentWithTabBar: {
-    paddingBottom: 100,
-  },
-  headerGradient: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    backgroundColor: colors.primary,
-    marginBottom: 16,
-  },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  headerIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '800' },
-  headerSubtitle: { color: '#FFE9EF', fontSize: 13, fontWeight: '500', marginTop: 2 },
-  profileHeader: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.primary,
-  },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.card,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  email: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  bloodTypeContainer: {
-    alignItems: 'center',
-  },
-  bloodTypeBadge: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  bloodTypeText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  availabilityCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  availabilityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  availabilityInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  availabilityText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  availabilityTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  availabilitySubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  infoContent: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
-    elevation: 4,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  secondaryButton: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-  },
-  secondaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  logoutButton: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.error,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-  },
-  logoutButtonText: {
-    color: colors.error,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-});
+// styles are theme-aware via useMemo above

@@ -1,11 +1,14 @@
 import express from 'express';
 import { authMiddleware, requireRequester, requireDonor, blockNone } from '../middleware/authMiddleware.js';
-import { createBloodRequest, getBloodRequestById, updateBloodRequestStatus, donorConfirmDonation, verifyDonation, uploadProof, iamMatchedDonor } from '../controllers/bloodRequestController.js';
+import { createBloodRequest, getBloodRequestById, getMyBloodRequests, updateBloodRequestStatus, donorConfirmDonation, verifyDonation, uploadProof, iamMatchedDonor } from '../controllers/bloodRequestController.js';
 
 const router = express.Router();
 
 // Create a new blood request
 router.post('/', authMiddleware, createBloodRequest);
+
+// List my blood requests (requester)
+router.get('/mine', authMiddleware, requireRequester, getMyBloodRequests);
 
 // Get specific request details
 router.get('/:id', authMiddleware, blockNone, getBloodRequestById);

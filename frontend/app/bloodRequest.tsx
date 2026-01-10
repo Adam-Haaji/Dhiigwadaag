@@ -7,9 +7,13 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import apiClient from "../service/api";
 import useAuth from "@/hooks/useAuth";
 import SelectFieldComponent from '../components/SelectField';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 
 export default function BloodRequest() {
   const { user, setUser } = useAuth();
+  const { isDark } = useTheme();
   const [focusedField, setFocusedField] = useState('');
   const [form, setForm] = useState({
     patientName: '',
@@ -102,9 +106,10 @@ export default function BloodRequest() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+          <IconSymbol name="chevron.left" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Blood Request</Text>
         <View style={styles.placeholder} />
@@ -116,7 +121,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, focusedField==='patientName' && commonStyles.inputFocused]}
             placeholder="Patient full name"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.patientName}
             onChangeText={(v) => update('patientName', v)}
             onFocus={() => setFocusedField('patientName')}
@@ -140,7 +145,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, focusedField==='units' && commonStyles.inputFocused]}
             placeholder="Number of units (bags)"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.units}
             onChangeText={(v) => update('units', v.replace(/[^\d]/g, ''))}
             onFocus={() => setFocusedField('units')}
@@ -165,7 +170,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, focusedField==='contactPerson' && commonStyles.inputFocused]}
             placeholder="Requester name"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.contactPerson}
             onChangeText={(v) => update('contactPerson', v)}
             onFocus={() => setFocusedField('contactPerson')}
@@ -174,7 +179,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, focusedField==='contactPhone' && commonStyles.inputFocused]}
             placeholder="Contact phone *"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.contactPhone}
             onChangeText={(v) => update('contactPhone', v)}
             onFocus={() => setFocusedField('contactPhone')}
@@ -192,7 +197,7 @@ export default function BloodRequest() {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
+          <Text style={{ color: semanticColors.textSecondary, marginTop: 6 }}>
             {`Critical: needs blood immediately  •  Normal: can wait up to 12–24 hours`}
           </Text>
         </View>
@@ -202,7 +207,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, focusedField==='reason' && commonStyles.inputFocused]}
             placeholder="e.g., Accident, Surgery"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.reason}
             onChangeText={(v) => update('reason', v)}
             onFocus={() => setFocusedField('reason')}
@@ -215,7 +220,7 @@ export default function BloodRequest() {
           <TextInput
             style={[commonStyles.input, styles.textArea, focusedField==='additionalNote' && commonStyles.inputFocused]}
             placeholder="Any extra instructions (optional)"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={semanticColors.textSecondary}
             value={form.additionalNote}
             onChangeText={(v) => update('additionalNote', v)}
             onFocus={() => setFocusedField('additionalNote')}
@@ -229,7 +234,7 @@ export default function BloodRequest() {
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.submitButton} onPress={submit}>
-          <IconSymbol name="paperplane.fill" size={20} color="#FFFFFF" />
+          <IconSymbol name="paperplane.fill" size={20} color={semanticColors.textInverse} />
           <Text style={styles.submitButtonText}>Submit Request</Text>
         </TouchableOpacity>
       </View>
@@ -238,22 +243,22 @@ export default function BloodRequest() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle },
   backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary },
   placeholder: { width: 40 },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingVertical: 20 },
   section: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  label: { fontSize: 14, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 8 },
   rowWrap: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' as const },
-  chip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginRight: 8, marginBottom: 8 },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontWeight: '600' },
-  chipTextActive: { color: '#fff' },
+  chip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: semanticColors.bgSurface, borderWidth: 1, borderColor: semanticColors.borderSubtle, marginRight: 8, marginBottom: 8 },
+  chipActive: { backgroundColor: semanticColors.interactivePrimary, borderColor: semanticColors.interactivePrimary },
+  chipText: { color: semanticColors.textPrimary, fontWeight: '600' },
+  chipTextActive: { color: semanticColors.textInverse },
   textArea: { height: 100, paddingTop: 16 },
-  footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  submitButton: { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, shadowColor: '#E74C3C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
-  submitButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+  footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: semanticColors.borderSubtle },
+  submitButton: { backgroundColor: semanticColors.interactivePrimary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, shadowColor: '#E74C3C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
+  submitButtonText: { color: semanticColors.textInverse, fontSize: 18, fontWeight: '600', marginLeft: 8 },
 });

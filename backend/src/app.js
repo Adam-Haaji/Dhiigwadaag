@@ -13,6 +13,7 @@ import bloodRequestRoutes from './routes/bloodRequests.js';
 import availableDonorsRoutes from './routes/availableDonors.js';
 import notificationRoutes from './routes/notifications.js';
 import matchRoutes from './routes/match.js';
+import statsRoutes from './routes/stats.js';
 import { startDonorReactivationCron } from './scheduler/reactivateDonors.js';
 import startExpiryScheduler from './scheduler/expireRequests.js';
 
@@ -34,6 +35,7 @@ app.use('/api/blood-requests', bloodRequestRoutes);
 app.use('/api/available-donors', availableDonorsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/match', matchRoutes);
+app.use('/api/stats', statsRoutes);
 app.use('/api', priorityRoutes);
 
 app.get('/', (req, res) => {

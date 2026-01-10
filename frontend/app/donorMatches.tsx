@@ -2,6 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/styles/commonStyles';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 import api from '@/service/api';
 import { router } from 'expo-router';
 
@@ -9,6 +12,7 @@ type Match = { _id: string; bloodType: string; requester?: { name?: string }; lo
 
 export default function DonorMatches() {
   const [items, setItems] = useState<Match[]>([]);
+  const { isDark } = useTheme();
   useEffect(() => { (async () => {
     try { const res = await api.listMyMatches(); setItems(Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : [])); } catch {}
   })(); }, []);
@@ -39,6 +43,7 @@ export default function DonorMatches() {
 
   return (
     <SafeAreaView style={s.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.sectionTitle}>🚨 Emergency Requests ({emergency.length})</Text>
         {emergency.map(m => renderCard(m, true))}
@@ -55,14 +60,14 @@ function formatTime(ms: number) {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: semanticColors.bgAlt },
   content: { padding: 16 },
-  sectionTitle: { color: colors.text, fontWeight: '800', marginBottom: 8 },
-  card: { backgroundColor: colors.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
-  emergency: { borderColor: colors.error, backgroundColor: '#FFF5F5' },
+  sectionTitle: { color: semanticColors.textPrimary, fontWeight: '800', marginBottom: 8 },
+  card: { backgroundColor: semanticColors.bgSurface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: semanticColors.borderSubtle, marginBottom: 12 },
+  emergency: { borderColor: semanticColors.interactiveDanger, backgroundColor: semanticColors.bgSurface },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: colors.text, fontWeight: '800' },
-  line: { color: colors.textSecondary, marginTop: 6 },
-  badgeCritical: { backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  badgeTxt: { color: '#fff', fontWeight: '700' },
+  title: { color: semanticColors.textPrimary, fontWeight: '800' },
+  line: { color: semanticColors.textSecondary, marginTop: 6 },
+  badgeCritical: { backgroundColor: semanticColors.interactiveDanger, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  badgeTxt: { color: semanticColors.textInverse, fontWeight: '700' },
 });

@@ -1,25 +1,30 @@
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-
-
+import { useNavigation } from '@react-navigation/native';
+import { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
+import api from '@/service/api';
 
 export default function ChangePasswordScreen() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
+  const { isDark } = useTheme();
   const [oldPass, setOldPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const [secureOld, setSecureOld] = useState(true);
   const [secureNew, setSecureNew] = useState(true);
@@ -29,7 +34,7 @@ export default function ChangePasswordScreen() {
 
   const validate = () => {
     const next: typeof errors = {};
-    if (!oldPass.trim()) next.old = 'Please enter your old password';
+    if (!oldPass.trim()) next.old = 'Please enter your current password';
     if (!newPass.trim()) next.new = 'Please enter a new password';
     else if (newPass.length < 6) next.new = 'Password must be at least 6 characters';
     if (!confirmPass.trim()) next.confirm = 'Please confirm your new password';
@@ -38,262 +43,176 @@ export default function ChangePasswordScreen() {
     return Object.keys(next).length === 0;
   };
 
-  const onChangePassword = () => {
+  const onChangePassword = async () => {
     if (!validate()) return;
-    // TODO: call your API here
-    Alert.alert('Success', 'Password changed');
-    setOldPass('');
-    setNewPass('');
-    setConfirmPass('');
+    setSubmitting(true);
+    try {
+      await (api as any).changePassword({ oldPassword: oldPass, newPassword: newPass });
+      Alert.alert('Success', 'Password changed');
+      setOldPass('');
+      setNewPass('');
+      setConfirmPass('');
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to change password');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    root: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+    },
+    backBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: semanticColors.bgAlt,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      paddingHorizontal: 12,
+      height: 36,
+      borderRadius: 12,
+    },
+    backText: { fontWeight: '700' },
+    headerTitle: { fontSize: 20, fontWeight: '800' },
+    centerContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+      paddingBottom: 24,
+    },
+    headerWrap: { alignItems: 'center', marginBottom: 16 },
+    title: { fontSize: 28, fontWeight: '900' },
+    subtitle: { marginTop: 8, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+    card: {
+      marginTop: 18,
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      shadowColor: semanticColors.cardShadow,
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
+      borderWidth: 1,
+    },
+    label: { fontWeight: '900', fontSize: 16, marginBottom: 8 },
+    input: {
+      borderRadius: 14,
+      paddingHorizontal: 20,
+      paddingVertical: Platform.OS === 'ios' ? 16 : 12,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    errorText: { marginTop: 6, fontSize: 12, fontWeight: '700' },
+    fieldGap: { height: 18 },
+    actionBtn: {
+      marginTop: 26,
+      height: 56,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionText: { fontSize: 18, fontWeight: '800' },
+    showHideBtn: { position: 'absolute', right: 12, top: Platform.OS === 'ios' ? 10 : 6, paddingHorizontal: 8, paddingVertical: 8 },
+    showHideText: { fontWeight: '800' },
+  }), [isDark, submitting]);
+
   return (
-    <SafeAreaView style={styles.root}>
-      {/* Header matching Settings style */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color={'#111827'} />
-          <Text style={styles.backText}>Back</Text>
+    <SafeAreaView style={[styles.root, { backgroundColor: semanticColors.bgAlt }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <View style={[styles.header, { backgroundColor: semanticColors.bgSurface, borderBottomColor: semanticColors.borderSubtle }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={22} color={semanticColors.textPrimary} />
+          <Text style={[styles.backText, { color: semanticColors.textPrimary }]}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Change Password</Text>
+        <Text style={[styles.headerTitle, { color: semanticColors.textPrimary }]}>Change Password</Text>
         <View style={{ width: 40 }} />
       </View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.centerContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerWrap}>
+            <Text style={[styles.title, { color: semanticColors.textPrimary }]}>Change Password</Text>
+            <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Enter your current and new password</Text>
+          </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: 12 }]}>
-        <View style={styles.spacer20} />
-        <Text style={styles.subtitle}>Enter your current and new password</Text>
-        <View style={styles.spacer16} />
+          <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }]}>
+            {/* Current Password */}
+            <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Current Password</Text>
+            <View>
+              <TextInput
+                placeholder="Current Password"
+                placeholderTextColor={semanticColors.textMuted}
+                secureTextEntry={secureOld}
+                value={oldPass}
+                onChangeText={setOldPass}
+                style={[styles.input, { backgroundColor: semanticColors.bgSurface, color: semanticColors.textPrimary, borderWidth: 1, borderColor: semanticColors.borderSubtle }]}
+                returnKeyType="next"
+              />
+              <TouchableOpacity onPress={() => setSecureOld((s) => !s)} style={styles.showHideBtn}>
+                <Text style={[styles.showHideText, { color: semanticColors.textMuted }]}>{secureOld ? 'Show' : 'Hide'}</Text>
+              </TouchableOpacity>
+            </View>
+            {!!errors.old && <Text style={[styles.errorText, { color: semanticColors.interactiveDanger }]}>{errors.old}</Text>}
 
-        <View style={styles.card}>
-          {/* Old Password */}
-          <Text style={styles.label}>Old Password</Text>
-          <View>
-            <TextInput
-              placeholder="Old Password"
-              placeholderTextColor={COLORS.hint}
-              secureTextEntry={secureOld}
-              value={oldPass}
-              onChangeText={setOldPass}
-              style={styles.input}
-              returnKeyType="next"
-            />
+            <View style={styles.fieldGap} />
+
+            {/* New Password */}
+            <Text style={[styles.label, { color: semanticColors.textPrimary }]}>New Password</Text>
+            <View>
+              <TextInput
+                placeholder="New Password"
+                placeholderTextColor={semanticColors.textMuted}
+                secureTextEntry={secureNew}
+                value={newPass}
+                onChangeText={setNewPass}
+                style={[styles.input, { backgroundColor: semanticColors.bgSurface, color: semanticColors.textPrimary, borderWidth: 1, borderColor: semanticColors.borderSubtle }]}
+                returnKeyType="next"
+              />
+              <TouchableOpacity onPress={() => setSecureNew((s) => !s)} style={styles.showHideBtn}>
+                <Text style={[styles.showHideText, { color: semanticColors.textMuted }]}>{secureNew ? 'Show' : 'Hide'}</Text>
+              </TouchableOpacity>
+            </View>
+            {!!errors.new && <Text style={[styles.errorText, { color: semanticColors.interactiveDanger }]}>{errors.new}</Text>}
+
+            <View style={styles.fieldGap} />
+
+            {/* Confirm New Password */}
+            <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Confirm New Password</Text>
+            <View>
+              <TextInput
+                placeholder="Confirm New Password"
+                placeholderTextColor={semanticColors.textMuted}
+                secureTextEntry={secureConfirm}
+                value={confirmPass}
+                onChangeText={setConfirmPass}
+                style={[styles.input, { backgroundColor: semanticColors.bgSurface, color: semanticColors.textPrimary, borderWidth: 1, borderColor: semanticColors.borderSubtle }]}
+                returnKeyType="done"
+              />
+              <TouchableOpacity onPress={() => setSecureConfirm((s) => !s)} style={styles.showHideBtn}>
+                <Text style={[styles.showHideText, { color: semanticColors.textMuted }]}>{secureConfirm ? 'Show' : 'Hide'}</Text>
+              </TouchableOpacity>
+            </View>
+            {!!errors.confirm && <Text style={[styles.errorText, { color: semanticColors.interactiveDanger }]}>{errors.confirm}</Text>}
+
             <TouchableOpacity
-              onPress={() => setSecureOld((s) => !s)}
-              style={styles.showHideBtn}
+              style={[styles.actionBtn, { backgroundColor: semanticColors.interactivePrimary, opacity: submitting ? 0.7 : 1 }]}
+              onPress={onChangePassword}
+              disabled={submitting}
             >
-              <Text style={styles.showHideText}>{secureOld ? 'Show' : 'Hide'}</Text>
+              <Text style={[styles.actionText, { color: semanticColors.textInverse }]}>{submitting ? 'Changing…' : 'Change Password'}</Text>
             </TouchableOpacity>
           </View>
-          {!!errors.old && <Text style={styles.errorText}>{errors.old}</Text>}
-
-          <View style={styles.fieldGap} />
-
-          {/* New Password */}
-          <Text style={styles.label}>New Password</Text>
-          <View>
-            <TextInput
-              placeholder="New Password"
-              placeholderTextColor={COLORS.hint}
-              secureTextEntry={secureNew}
-              value={newPass}
-              onChangeText={setNewPass}
-              style={styles.input}
-              returnKeyType="next"
-            />
-            <TouchableOpacity
-              onPress={() => setSecureNew((s) => !s)}
-              style={styles.showHideBtn}
-            >
-              <Text style={styles.showHideText}>{secureNew ? 'Show' : 'Hide'}</Text>
-            </TouchableOpacity>
-          </View>
-          {!!errors.new && <Text style={styles.errorText}>{errors.new}</Text>}
-
-          <View style={styles.fieldGap} />
-
-          {/* Confirm Password */}
-          <Text style={styles.label}>Confirm Password</Text>
-          <View>
-            <TextInput
-              placeholder="Confirm Password"
-              placeholderTextColor={COLORS.hint}
-              secureTextEntry={secureConfirm}
-              value={confirmPass}
-              onChangeText={setConfirmPass}
-              style={styles.input}
-              returnKeyType="done"
-            />
-            <TouchableOpacity
-              onPress={() => setSecureConfirm((s) => !s)}
-              style={styles.showHideBtn}
-            >
-              <Text style={styles.showHideText}>{secureConfirm ? 'Show' : 'Hide'}</Text>
-            </TouchableOpacity>
-          </View>
-          {!!errors.confirm && <Text style={styles.errorText}>{errors.confirm}</Text>}
-
-          {/* Change Password Button */}
-          <TouchableOpacity style={styles.saveBtn} onPress={onChangePassword}>
-            <Text style={styles.saveText}>Change Password</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.spacer24} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-const COLORS = {
-  white: '#FFFFFF',
-  black: '#000000',
-  label: '#303645',
-  caption: '#6B7280',
-  hint: '#9AA4B2',
-  muted: '#687081',
-  fieldFill: '#F3F6FA',
-  red: '#FF4B4B',
-  cardBorder: '#EEF2F6',
-};
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  appBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingTop: Platform.OS === 'android' ? 8 : 0,
-    height: 56,
-    backgroundColor: COLORS.white,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: COLORS.white,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FDECEA',
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 12,
-    marginTop: 40
-  },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  appBarLeading: {
-    position: 'absolute',
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  backIcon: {
-    fontSize: 18,
-    color: COLORS.black,
-    marginRight: 2,
-  },
-  backText: {
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  spacer20: { height: 20 },
-  spacer16: { height: 16 },
-  spacer24: { height: 24 },
-
-  subtitle: {
-    textAlign: 'center',
-    color: COLORS.caption,
-    fontWeight: '900',
-    fontSize: 16,
-  },
-
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    // iOS shadow
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    // Android elevation
-    elevation: 4,
-    borderWidth: Platform.OS === 'android' ? 0 : 1,
-    borderColor: COLORS.cardBorder,
-  },
-
-  label: {
-    color: COLORS.label,
-    fontWeight: '900',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-
-  input: {
-    backgroundColor: COLORS.fieldFill,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: Platform.OS === 'ios' ? 16 : 12,
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-
-  errorText: {
-    marginTop: 6,
-    color: '#D32F2F',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  fieldGap: { height: 18 },
-
-  saveBtn: {
-    marginTop: 26,
-    backgroundColor: COLORS.red,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-
-  showHideBtn: {
-    position: 'absolute',
-    right: 12,
-    top: Platform.OS === 'ios' ? 10 : 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  showHideText: {
-    color: COLORS.muted,
-    fontWeight: '800',
-  },
-});

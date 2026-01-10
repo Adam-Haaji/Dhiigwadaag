@@ -1,11 +1,12 @@
 import express from 'express';
-import { getProfile, updateProfile, listDonors, getUserById, updateUserById, switchRole } from '../controllers/userController.js';
+import { getProfile, updateProfile, listDonors, getUserById, updateUserById, switchRole, changePassword } from '../controllers/userController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.get('/me', authMiddleware, getProfile);
 router.put('/me', authMiddleware, updateProfile);
+router.post('/change-password', authMiddleware, changePassword);
 router.post('/switch-role', authMiddleware, switchRole);
 router.get('/donors', listDonors);
 // Spec compatibility

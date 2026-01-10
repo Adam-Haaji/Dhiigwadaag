@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuth from '@/hooks/useAuth';
 import { colors } from '@/styles/commonStyles';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 import api from '@/service/api';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -10,6 +13,7 @@ import HeroCard from '@/components/HeroCard';
 
 export default function DonorDashboard() {
   const { user, setUser } = useAuth();
+  const { isDark } = useTheme();
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
   const unavailableUntil = user?.user?.unavailableUntil ? new Date(user.user.unavailableUntil) : null;
@@ -82,8 +86,42 @@ export default function DonorDashboard() {
     return 'Not a donor';
   }, [donorStatus, unavailableUntil]);
 
+  const s = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+    content: { paddingVertical: 16, paddingBottom: 40 },
+    topRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
+    header: { fontSize: 18, fontWeight: '800', color: semanticColors.textPrimary },
+    toast: { position: 'absolute', top: 10, left: 16, right: 16, zIndex: 10, backgroundColor: semanticColors.bgSurface, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    toastText: { color: semanticColors.textPrimary, fontWeight: '700' },
+    toastCtaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    toastCta: { color: colors.primary, fontWeight: '800' },
+    topActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: 8 },
+    switchPill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: semanticColors.bgSurface, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    switchPillText: { color: semanticColors.textPrimary, fontWeight: '700' },
+    card: { alignSelf: 'center', width: '92%', backgroundColor: semanticColors.bgSurface, padding: 16, borderRadius: 16, marginTop: 12, shadowColor: 'rgba(0,0,0,0.15)', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 3, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    cardTitle: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+    rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    badge: { backgroundColor: semanticColors.bgAlt, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    badgeOk: { backgroundColor: semanticColors.interactivePrimaryActive },
+    badgeWarn: { backgroundColor: semanticColors.interactiveDanger },
+    badgeMuted: { backgroundColor: semanticColors.bgAlt },
+    badgeText: { color: semanticColors.textPrimary, fontWeight: '700' },
+    metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+    metaKey: { color: semanticColors.textSecondary },
+    metaVal: { color: semanticColors.textPrimary, fontWeight: '700' },
+    listItem: { borderTopWidth: 1, borderTopColor: semanticColors.borderSubtle, paddingVertical: 10 },
+    itemTitle: { color: semanticColors.textPrimary, fontWeight: '600' },
+    itemMeta: { color: semanticColors.textSecondary, marginTop: 2 },
+    empty: { color: semanticColors.textSecondary },
+    profileBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+    profileBtnText: { color: semanticColors.textInverse, fontWeight: '700' },
+    linkPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+    linkPillTxt: { color: semanticColors.textInverse, fontWeight: '800' },
+  }), [isDark]);
+
   return (
     <SafeAreaView style={s.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {!!toast && (
         <View style={s.toast}>
           <Text style={s.toastText}>{toast.text}</Text>
@@ -97,7 +135,7 @@ export default function DonorDashboard() {
         <View style={s.topRowBetween}>
           <Text style={s.header}>Donor Dashboard</Text>
           <TouchableOpacity style={s.linkPill} onPress={openLatestMatchOrNotification}>
-            <IconSymbol name="bell.fill" size={16} color="#FFFFFF" />
+            <IconSymbol name="bell.fill" size={16} color={semanticColors.textInverse} />
             <Text style={s.linkPillTxt}>View Matched Requests</Text>
           </TouchableOpacity>
         </View>
@@ -179,35 +217,4 @@ export default function DonorDashboard() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6F8' },
-  content: { paddingVertical: 16, paddingBottom: 40 },
-  topRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
-  header: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  toast: { position: 'absolute', top: 10, left: 16, right: 16, zIndex: 10, backgroundColor: '#111827', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toastText: { color: '#FFFFFF', fontWeight: '700' },
-  toastCtaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  toastCta: { color: colors.primary, fontWeight: '800' },
-  topActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: 8 },
-  switchPill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#DADDE1' },
-  switchPillText: { color: '#111827', fontWeight: '700' },
-  card: { alignSelf: 'center', width: '92%', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginTop: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  badge: { backgroundColor: '#EEF2FF', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999 },
-  badgeOk: { backgroundColor: '#E7F6EC' },
-  badgeWarn: { backgroundColor: '#FFF4E5' },
-  badgeMuted: { backgroundColor: '#EAEAEA' },
-  badgeText: { color: '#111827', fontWeight: '700' },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  metaKey: { color: '#6B7280' },
-  metaVal: { color: '#111827', fontWeight: '700' },
-  listItem: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingVertical: 10 },
-  itemTitle: { color: '#111827', fontWeight: '600' },
-  itemMeta: { color: '#6B7280', marginTop: 2 },
-  empty: { color: '#6B7280' },
-  profileBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
-  profileBtnText: { color: '#fff', fontWeight: '700' },
-  linkPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
-  linkPillTxt: { color: '#fff', fontWeight: '800' },
-});
+// styles moved inside component

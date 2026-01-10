@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import apiClient from '../../service/api';
 import { colors } from '@/styles/commonStyles';
 import useAuthHook from '@/hooks/useAuth';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -14,6 +17,27 @@ export default function RequestDetail() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { user } = useAuthHook();
+  const { isDark } = useTheme();
+
+  const s = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    content: { padding: 20 },
+    card: { backgroundColor: semanticColors.bgSurface, padding: 16, borderRadius: 12, marginBottom: 12, position: 'relative' },
+    title: { fontSize: 18, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+    section: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+    row: { fontSize: 14, color: semanticColors.textPrimary, marginBottom: 4 },
+    bold: { fontWeight: '700' },
+    error: { color: semanticColors.interactiveDanger },
+    actionsCol: { gap: 12, marginTop: 4 },
+    actionBtnFull: { width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+    actionTxt: { color: semanticColors.textInverse, fontWeight: '700' },
+    cta: { backgroundColor: semanticColors.interactivePrimary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 12 },
+    ctaText: { color: semanticColors.textInverse, fontWeight: '700' },
+    badge: { position: 'absolute', right: 12, top: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
+    badgeText: { color: semanticColors.textInverse, fontWeight: '700', fontSize: 12 },
+    statusText: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  }), [isDark]);
   const userId: string | undefined = (user as any)?._id || (user as any)?.id;
   const userEmail: string | undefined = (user as any)?.email?.toLowerCase?.();
   const isAdmin = String((user as any)?.role || '').toLowerCase() === 'admin';
@@ -80,9 +104,10 @@ export default function RequestDetail() {
 
   return (
     <SafeAreaView style={s.container}>
-      <Stack.Screen options={{ title: 'Request Details', headerShown: true }} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack.Screen options={{ title: 'Request Details', headerShown: true, headerStyle: { backgroundColor: semanticColors.bgAlt }, headerTintColor: semanticColors.textPrimary }} />
       {loading && (
-        <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
+        <View style={s.center}><ActivityIndicator color={semanticColors.interactivePrimary} /></View>
       )}
       {!loading && error && (
         <View style={s.center}><Text style={s.error}>{error}</Text></View>
@@ -94,7 +119,7 @@ export default function RequestDetail() {
               <Text style={s.badgeText}>{data.status}</Text>
             </View>
             <Text style={s.title}>Patient: {data.patientName}</Text>
-            <Text style={[s.statusText, { color: (data.status === 'Fulfilled' ? '#2E7D32' : '#F39C12') }]}>Status: {data.status}</Text>
+            <Text style={[s.statusText, { color: (data.status === 'Fulfilled' ? semanticColors.interactivePrimary : semanticColors.interactiveDanger) }]}>Status: {data.status}</Text>
             <Text style={s.row}>Blood Type: <Text style={s.bold}>{data.bloodType}</Text></Text>
             <Text style={s.row}>Urgency: <Text style={s.bold}>{data.urgency}</Text></Text>
             <Text style={s.row}>Location: <Text style={s.bold}>{data.location}</Text></Text>
@@ -112,7 +137,7 @@ export default function RequestDetail() {
           )}
 
           <View style={s.actionsCol}>
-            <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: colors.success }]} disabled={submitting} onPress={callRequester}>
+            <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: semanticColors.interactivePrimary }]} disabled={submitting} onPress={callRequester}>
               <Text style={s.actionTxt}>Call Requester</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[s.actionBtnFull, { backgroundColor: '#25D366' }]} disabled={submitting} onPress={whatsappRequester}>
@@ -120,7 +145,7 @@ export default function RequestDetail() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={[s.cta, { backgroundColor: '#E53935' }]} disabled={submitting} onPress={() => handleResponse('donate')}>
+          <TouchableOpacity style={[s.cta, { backgroundColor: semanticColors.interactiveDanger }]} disabled={submitting} onPress={() => handleResponse('donate')}>
             <Text style={s.ctaText}>I Can Donate</Text>
           </TouchableOpacity>
 
@@ -143,9 +168,9 @@ export default function RequestDetail() {
                   setSubmitting(false);
                 }
               }}
-              style={{ backgroundColor: '#4CAF50', padding: 14, borderRadius: 10, marginTop: 10 }}
+              style={{ backgroundColor: semanticColors.interactivePrimary, padding: 14, borderRadius: 10, marginTop: 10 }}
             >
-              <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>Mark as Fulfilled</Text>
+              <Text style={{ color: semanticColors.textInverse, textAlign: 'center', fontWeight: 'bold' }}>Mark as Fulfilled</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -154,34 +179,16 @@ export default function RequestDetail() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 20 },
-  card: { backgroundColor: colors.card, padding: 16, borderRadius: 12, marginBottom: 12, position: 'relative' },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  section: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  row: { fontSize: 14, color: colors.text, marginBottom: 4 },
-  bold: { fontWeight: '700' },
-  error: { color: '#E74C3C' },
-  actionsCol: { gap: 12, marginTop: 4 },
-  actionBtnFull: { width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  actionTxt: { color: '#fff', fontWeight: '700' },
-  cta: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 12 },
-  ctaText: { color: '#fff', fontWeight: '700' },
-  badge: { position: 'absolute', right: 12, top: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
-  badgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  statusText: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
-});
+// styles are theme-reactive via useMemo above
 
 function badgeStyle(status?: string) {
-  const base = { backgroundColor: '#9E9E9E' } as any;
+  const base = { backgroundColor: semanticColors.borderStrong } as any;
   switch ((status || '').toLowerCase()) {
-    case 'pending': return { backgroundColor: '#9E9E9E' };
-    case 'contacted': return { backgroundColor: '#1976D2' };
-    case 'matched': return { backgroundColor: '#2E7D32' };
+    case 'pending': return { backgroundColor: semanticColors.borderStrong };
+    case 'contacted': return { backgroundColor: semanticColors.interactivePrimaryActive };
+    case 'matched': return { backgroundColor: semanticColors.interactivePrimary };
     case 'fulfilled': return { backgroundColor: '#6A1B9A' };
-    case 'cancelled': return { backgroundColor: '#B71C1C' };
+    case 'cancelled': return { backgroundColor: semanticColors.interactiveDanger };
     default: return base;
   }
 }

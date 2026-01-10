@@ -37,7 +37,7 @@ function InnerLayout() {
 
   const { isDark } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: isDark ? '#0F1115' : semanticColors.bgAlt }}>
+    <View style={{ flex: 1, backgroundColor: semanticColors.bgAlt }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       {fontsLoaded && <Stack screenOptions={{ headerShown: false }} />}
     </View>

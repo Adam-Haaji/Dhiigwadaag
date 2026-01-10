@@ -12,7 +12,8 @@ import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 // Removed BlurView dependency to avoid install/bundling/update issues
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from '@/context/ThemeContext';
+import { semanticColors } from '@/constants/colors';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -46,7 +47,7 @@ export default function FloatingTabBar({
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const theme = useTheme();
+  const { isDark } = useTheme();
   const animatedValue = useSharedValue(0);
 
   // Improved active tab detection with better path matching
@@ -120,22 +121,16 @@ export default function FloatingTabBar({
       ...styles.blurContainer,
       ...Platform.select({
         ios: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.8)'
-            : 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: isDark ? 'rgba(31,41,55,0.85)' : 'rgba(255,255,255,0.85)',
         },
         android: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
+          backgroundColor: isDark ? 'rgba(31,41,55,0.95)' : 'rgba(255,255,255,0.95)',
           elevation: 8,
         },
         web: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
+          backgroundColor: isDark ? 'rgba(31,41,55,0.95)' : 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(10px)',
-          boxShadow: theme.dark
+          boxShadow: isDark
             ? '0 8px 32px rgba(0, 0, 0, 0.4)'
             : '0 8px 32px rgba(0, 0, 0, 0.1)',
         },
@@ -143,15 +138,11 @@ export default function FloatingTabBar({
     },
     background: {
       ...styles.background,
-      backgroundColor: theme.dark
-        ? (Platform.OS === 'ios' ? 'transparent' : 'rgba(28, 28, 30, 0.1)')
-        : (Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.1)'),
+      backgroundColor: Platform.OS === 'ios' ? 'transparent' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: theme.dark
-        ? 'rgba(255, 255, 255, 0.08)' // Subtle white overlay in dark mode
-        : 'rgba(0, 0, 0, 0.04)', // Subtle black overlay in light mode
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
       width: tabWidth, // numeric width for better typing compatibility
     },
   };
@@ -186,7 +177,7 @@ export default function FloatingTabBar({
                     <IconSymbol
                       name={tab.icon as any}
                       size={28} // Increased icon size from 24 to 28
-                      color={isActive ? '#E74C3C' : '#666666'}
+                      color={isActive ? semanticColors.interactivePrimary : semanticColors.textMuted}
                     />
                     {!!badgeCount && (
                       <View style={styles.badgeWrap}>
@@ -196,8 +187,8 @@ export default function FloatingTabBar({
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: '#666666' },
-                        isActive && { color: '#E74C3C', fontWeight: '600' },
+                        { color: semanticColors.textSecondary },
+                        isActive && { color: semanticColors.interactivePrimary, fontWeight: '600' },
                       ]}
                     >
                       {tab.label}
@@ -277,12 +268,12 @@ const styles = StyleSheet.create({
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: '#E74C3C',
+    backgroundColor: semanticColors.interactivePrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: semanticColors.textInverse,
     fontSize: 10,
     fontWeight: '700',
   },

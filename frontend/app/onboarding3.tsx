@@ -1,13 +1,112 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 import { router } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '@/context/ThemeContext';
+import colorsBase, { semanticColors } from '@/constants/colors';
 
 const onboarding3 = () => {
+  const { isDark } = useTheme();
+
+  const styles = useMemo(() => {
+    const dotIdle = isDark ? semanticColors.borderStrong : colorsBase.palette.brandSoft;
+    return StyleSheet.create({
+      container: {
+        flex: 1,
+        backgroundColor: semanticColors.bgAlt,
+        paddingHorizontal: 24,
+        paddingTop: 40,
+        justifyContent: 'center',
+      },
+      skipButton: {
+        position: 'absolute',
+        top: 40,
+        right: 20,
+      },
+      skipText: {
+        fontSize: 16,
+        color: semanticColors.textPrimary,
+      },
+      imageContainer: {
+        alignItems: 'center',
+        marginBottom: 40,
+      },
+      image: {
+        width: 200,
+        height: 200,
+        borderRadius: 10,
+      },
+      header: {
+        marginBottom: 30,
+      },
+      title: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: semanticColors.textPrimary,
+        textAlign: 'center',
+        letterSpacing: 0.5,
+      },
+      descriptionContainer: {
+        marginBottom: 30,
+      },
+      description: {
+        fontSize: 16,
+        color: semanticColors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 24,
+        letterSpacing: 0.3,
+      },
+      dotsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 40,
+      },
+      dot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: dotIdle,
+        marginHorizontal: 5,
+      },
+      activeDot: {
+        backgroundColor: semanticColors.interactivePrimary,
+      },
+      divider: {
+        height: 1,
+        backgroundColor: semanticColors.borderSubtle,
+        marginVertical: 30,
+        width: '100%',
+      },
+      buttonContainer: {
+        alignItems: 'center',
+        marginTop: 20,
+      },
+      button: {
+        backgroundColor: semanticColors.interactivePrimary,
+        paddingVertical: 16,
+        paddingHorizontal: 40,
+        borderRadius: 8,
+        minWidth: 200,
+        alignItems: 'center',
+      },
+      buttonText: {
+        color: semanticColors.textInverse,
+        fontSize: 18,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+      },
+    });
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Skip Button */}
+      <TouchableOpacity onPress={() => router.push('/login')} accessibilityRole="button" style={styles.skipButton}>
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
       
       {/* Image Section */}
       <View style={styles.imageContainer}>
@@ -49,83 +148,4 @@ const onboarding3 = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    justifyContent: 'center',
-  },
-  imageContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  image: {
-    width: 200,
-    height: 200,
-    borderRadius: 10,
-  },
-  header: {
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  descriptionContainer: {
-    marginBottom: 30,
-  },
-  description: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-    lineHeight: 24,
-    letterSpacing: 0.3,
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 40,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F2B6B6',
-    marginHorizontal: 5,
-  },
-  activeDot: {
-    backgroundColor: '#FF6B6B',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginVertical: 30,
-    width: '100%',
-  },
-  buttonContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  button: {
-    backgroundColor: '#FF4747',
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 8,
-    minWidth: 200,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-});
-
 export default onboarding3;

@@ -1,13 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Platform, ToastAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import apiClient from '../service/api';
-import { colors } from '@/styles/commonStyles';
+import colorsBase, { semanticColors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function RequestStatus() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params?.id as string | undefined;
+  const { isDark } = useTheme();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,46 +77,62 @@ export default function RequestStatus() {
     }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: semanticColors.bgAlt },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    content: { padding: 20 },
+    card: { backgroundColor: semanticColors.bgSurface, padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    title: { fontSize: 18, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+    section: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
+    row: { fontSize: 14, color: semanticColors.textPrimary, marginBottom: 4 },
+    bold: { fontWeight: '700', color: semanticColors.textPrimary },
+    error: { color: semanticColors.interactiveDanger },
+    donateBtn: { marginTop: 12, backgroundColor: colorsBase.palette.success, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
+    donateTxt: { color: semanticColors.textInverse, fontWeight: '700' },
+    successNote: { color: colorsBase.palette.success, marginBottom: 6 },
+  }), [isDark]);
+
   return (
-    <SafeAreaView style={s.container}>
+    <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: 'Request Status', headerShown: true }} />
       {loading && (
-        <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
+        <View style={styles.center}><ActivityIndicator color={semanticColors.interactivePrimary} /></View>
       )}
       {!loading && error && (
-        <View style={s.center}><Text style={s.error}>{error}</Text></View>
+        <View style={styles.center}><Text style={styles.error}>{error}</Text></View>
       )}
       {!loading && !error && data && (
-        <ScrollView contentContainerStyle={s.content}>
-          <View style={s.card}>
-            <Text style={s.title}>{statusMessage(data.status)}</Text>
-            <Text style={s.row}>Patient: <Text style={s.bold}>{data.patientName}</Text></Text>
-            <Text style={s.row}>Blood Group: <Text style={s.bold}>{data.bloodGroup || data.bloodType}</Text></Text>
-            <Text style={s.row}>District: <Text style={s.bold}>{data.district || data.location}</Text></Text>
-            <Text style={s.row}>Urgency: <Text style={s.bold}>{data.urgencyLevel || data.urgentLevel || data.urgency}</Text></Text>
-            <Text style={s.row}>Status: <Text style={s.bold}>{data.status}</Text></Text>
-            {data.fulfilledAt && <Text style={s.row}>Fulfilled At: <Text style={s.bold}>{new Date(data.fulfilledAt).toLocaleString()}</Text></Text>}
+        <ScrollView contentContainerStyle={styles.content}>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
+          <View style={styles.card}>
+            <Text style={styles.title}>{statusMessage(data.status)}</Text>
+            <Text style={styles.row}>Patient: <Text style={styles.bold}>{data.patientName}</Text></Text>
+            <Text style={styles.row}>Blood Group: <Text style={styles.bold}>{data.bloodGroup || data.bloodType}</Text></Text>
+            <Text style={styles.row}>District: <Text style={styles.bold}>{data.district || data.location}</Text></Text>
+            <Text style={styles.row}>Urgency: <Text style={styles.bold}>{data.urgencyLevel || data.urgentLevel || data.urgency}</Text></Text>
+            <Text style={styles.row}>Status: <Text style={styles.bold}>{data.status}</Text></Text>
+            {data.fulfilledAt && <Text style={styles.row}>Fulfilled At: <Text style={styles.bold}>{new Date(data.fulfilledAt).toLocaleString()}</Text></Text>}
           </View>
 
           {data.donorId && (
-            <View style={s.card}>
-              <Text style={s.section}>Matched Donor</Text>
-              <Text style={s.row}>Donor ID: <Text style={s.bold}>{data.donorId._id || data.donorId}</Text></Text>
+            <View style={styles.card}>
+              <Text style={styles.section}>Matched Donor</Text>
+              <Text style={styles.row}>Donor ID: <Text style={styles.bold}>{data.donorId._id || data.donorId}</Text></Text>
               {data.donorId.fullName && (
-                <Text style={s.row}>Name: <Text style={s.bold}>{data.donorId.fullName}</Text></Text>
+                <Text style={styles.row}>Name: <Text style={styles.bold}>{data.donorId.fullName}</Text></Text>
               )}
               {data.donorId.phone && (
-                <Text style={s.row}>Phone: <Text style={s.bold}>{data.donorId.phone}</Text></Text>
+                <Text style={styles.row}>Phone: <Text style={styles.bold}>{data.donorId.phone}</Text></Text>
               )}
               {data.donorId.bloodGroup && (
-                <Text style={s.row}>Blood Group: <Text style={s.bold}>{data.donorId.bloodGroup}</Text></Text>
+                <Text style={styles.row}>Blood Group: <Text style={styles.bold}>{data.donorId.bloodGroup}</Text></Text>
               )}
 
               {String(data.status || '').toLowerCase() === 'matched' && isMatched && (
                 <>
-                  <Text style={[s.row, { color: '#2E7D32', marginBottom: 6 }]}>You are the matched donor for this request.</Text>
-                  <TouchableOpacity style={[s.donateBtn, { marginTop: 8 }]} disabled={submitting} onPress={handleDonorConfirm}>
-                    <Text style={s.donateTxt}>I Have Donated</Text>
+                  <Text style={[styles.row, styles.successNote]}>You are the matched donor for this request.</Text>
+                  <TouchableOpacity style={[styles.donateBtn, { marginTop: 8 }]} disabled={submitting} onPress={handleDonorConfirm}>
+                    <Text style={styles.donateTxt}>I Have Donated</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -125,16 +144,3 @@ export default function RequestStatus() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 20 },
-  card: { backgroundColor: colors.card, padding: 16, borderRadius: 12, marginBottom: 12 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  section: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  row: { fontSize: 14, color: colors.text, marginBottom: 4 },
-  bold: { fontWeight: '700' },
-  error: { color: '#E74C3C' },
-  donateBtn: { marginTop: 12, backgroundColor: '#2E7D32', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  donateTxt: { color: '#fff', fontWeight: '700' }
-});

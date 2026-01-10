@@ -7,6 +7,61 @@ import { evaluateEligibility } from '../utils/eligibility.js';
 import { getDistrictExpansionOrder } from '../utils/districtNeighbors.js';
 import { isValidLocation } from '../utils/locations.js';
 
+const pickMatchedDonorContact = async (doc) => {
+  // Legacy Request: matchedDonorId is typically User._id; sometimes it may be a Donor._id
+  const md = doc?.matchedDonorId;
+  if (md && typeof md === 'object') {
+    return {
+      name: md?.name || md?.fullName || md?.email,
+      phone: md?.phone,
+      email: md?.email,
+      location: md?.location || md?.district,
+      bloodType: md?.bloodType || md?.bloodGroup,
+    };
+  }
+  if (md) {
+    const id = String(md);
+    // Try as a User id first
+    const u = await User.findById(id).select('name email phone location bloodType').lean().catch(() => null);
+    if (u) {
+      return { name: u?.name || u?.email, phone: u?.phone, email: u?.email, location: u?.location, bloodType: u?.bloodType };
+    }
+    // Then try as a Donor id
+    const d = await Donor.findById(id).select('fullName phone email district bloodGroup user').lean().catch(() => null);
+    if (d) {
+      return {
+        name: d?.fullName,
+        phone: d?.phone,
+        email: d?.email,
+        location: d?.district,
+        bloodType: d?.bloodGroup,
+      };
+    }
+  }
+  return null;
+};
+
+const pickMatchedDonorContactFromBloodRequest = async (br) => {
+  // BloodRequest uses donorId -> Donor document
+  const donor = br?.donorId;
+  if (donor && typeof donor === 'object') {
+    return {
+      name: donor?.fullName || donor?.name,
+      phone: donor?.phone,
+      email: donor?.email,
+      location: donor?.district || donor?.location,
+      bloodType: donor?.bloodGroup || donor?.bloodType,
+    };
+  }
+  if (donor) {
+    const d = await Donor.findById(String(donor)).select('fullName phone email district bloodGroup').lean().catch(() => null);
+    if (d) {
+      return { name: d?.fullName, phone: d?.phone, email: d?.email, location: d?.district, bloodType: d?.bloodGroup };
+    }
+  }
+  return null;
+};
+
 export const createRequest = async (req, res) => {
   try {
     const { patientName, bloodType } = req.body;
@@ -328,6 +383,49 @@ export const getRequestById = async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+// GET /api/requests/:id/matched-donor - minimal donor contact for requester
+// Used by notification-driven screens where full request view might be forbidden.
+export const getMatchedDonorForRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Try legacy Request first
+    const doc = await Request.findById(id)
+      .populate('requesterId', '_id')
+      .populate('matchedDonorId', 'name email phone location bloodType')
+      .lean();
+
+    if (doc) {
+      const isOwner = String((doc.requesterId && (doc.requesterId._id || doc.requesterId)) || '') === String(userId);
+      const hasNoti = await Notification.exists({ userId, 'meta.requestId': doc._id }).catch(() => null);
+      if (!isOwner && !hasNoti) return res.status(403).json({ error: 'Forbidden' });
+
+      const donor = await pickMatchedDonorContact(doc);
+      if (!donor) return res.status(404).json({ error: 'Donor not assigned' });
+      return res.json({ success: true, donor });
+    }
+
+    // Fallback: BloodRequest
+    const br = await BloodRequest.findById(id)
+      .populate('requesterId', '_id')
+      .populate('donorId', 'fullName phone email district bloodGroup')
+      .lean();
+    if (!br) return res.status(404).json({ error: 'Request not found' });
+
+    const isOwner = String((br.requesterId && (br.requesterId._id || br.requesterId)) || '') === String(userId);
+    const hasNoti = await Notification.exists({ userId, 'meta.requestId': br._id }).catch(() => null);
+    if (!isOwner && !hasNoti) return res.status(403).json({ error: 'Forbidden' });
+
+    const donor = await pickMatchedDonorContactFromBloodRequest(br);
+    if (!donor) return res.status(404).json({ error: 'Donor not assigned' });
+    return res.json({ success: true, donor });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 };
 

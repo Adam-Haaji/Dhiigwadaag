@@ -5,10 +5,13 @@ import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const { user } = useAuth();
   const role = String(user?.user?.role || '').toLowerCase();
+  const { isDark } = useTheme();
 
   //  Tabs configuration
   const [activeReqCount, setActiveReqCount] = useState<number>(0);
@@ -111,7 +114,9 @@ export default function TabLayout() {
   // ✅ iOS navigation
   if (Platform.OS === 'ios') {
     return (
-      <NativeTabs>
+      <>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <NativeTabs>
         <NativeTabs.Trigger name="index"> {/* opens app/(home)/index.tsx */}
           <Icon sf="house.fill" drawable="ic_home" />
           <Label>Home</Label>
@@ -132,7 +137,8 @@ export default function TabLayout() {
           <Icon sf="person.fill" drawable="ic_profile" />
           <Label>Profile</Label>
         </NativeTabs.Trigger>
-      </NativeTabs>
+        </NativeTabs>
+      </>
     );
   }
 
@@ -141,6 +147,7 @@ export default function TabLayout() {
   // and render the FloatingTabBar as a sibling.
   return (
     <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerShown: false,

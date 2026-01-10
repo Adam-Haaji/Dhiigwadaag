@@ -140,6 +140,19 @@ export const getBloodRequestById = async (req, res) => {
   }
 };
 
+// GET /api/blood-requests/mine
+// Lists the authenticated requester's blood requests.
+export const getMyBloodRequests = async (req, res) => {
+  try {
+    const requesterId = req?.user?.id || req?.user?._id;
+    if (!requesterId) return res.status(401).json({ error: 'Unauthorized' });
+    const list = await BloodRequest.find({ requesterId }).sort({ createdAt: -1 }).lean();
+    return res.json({ requests: list });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 export const updateBloodRequestStatus = async (req, res) => {
   try {
     const { id } = req.params;
