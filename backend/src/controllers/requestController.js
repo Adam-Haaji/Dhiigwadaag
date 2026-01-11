@@ -67,6 +67,9 @@ export const createRequest = async (req, res) => {
     const { patientName, bloodType } = req.body;
     let units = Number(req.body?.units);
     let { location, urgency, lat, lng } = req.body;
+    const hospitalName = req.body?.hospitalName ? String(req.body.hospitalName).trim() : undefined;
+    // Accept either contactPhone or phone for compatibility
+    const contactPhone = req.body?.contactPhone ? String(req.body.contactPhone).trim() : (req.body?.phone ? String(req.body.phone).trim() : undefined);
     // Normalize urgency to Normal/Urgent/Critical
     const u = String(urgency || 'Normal').toLowerCase();
     urgency = u === 'critical' ? 'Critical' : u === 'urgent' ? 'Urgent' : 'Normal';
@@ -90,6 +93,8 @@ export const createRequest = async (req, res) => {
       patientName,
       bloodType,
       location,
+      hospitalName,
+      contactPhone,
       urgency,
       units,
       requesterId: req.user?.id,
@@ -117,7 +122,7 @@ export const createRequest = async (req, res) => {
       const notifications = donorUsers.map((u) => ({
         userId: u._id,
         title: 'New Blood Request',
-        message: `A new request for blood type ${bloodType} has been created near your location. Please check if you can help.`,
+        message: `A new request for blood type ${bloodType} has been created near your location${hospitalName ? ` at ${hospitalName}` : ''}. Please check if you can help.`,
         type: 'request',
         urgent: String(urgency).toLowerCase() === 'critical' || String(urgency).toLowerCase() === 'urgent',
         meta: {
@@ -125,6 +130,7 @@ export const createRequest = async (req, res) => {
           bloodType,
           location,
           urgency,
+          hospitalName,
           requesterId: req.user?.id,
           requesterName: requester?.name,
         },
@@ -302,6 +308,7 @@ export const getRequestById = async (req, res) => {
           patientName: doc.patientName,
           bloodType: doc.bloodType,
           location: doc.location,
+          hospitalName: doc.hospitalName,
           units: doc.units,
           urgency: doc.urgency,
           status: doc.status,
@@ -647,6 +654,22 @@ export const markFulfilled = async (req, res) => {
         actingDonor.isActive = false;
         actingDonor.availabilityStatus = 'unavailable';
         await actingDonor.save();
+        // Mirror cooldown to linked User so mobile UI reflects status immediately
+        try {
+          const linkedUserId = actingDonor.user || (req.user && req.user.id);
+          if (linkedUserId) {
+            await User.findByIdAndUpdate(linkedUserId, {
+              $set: {
+                lastDonationDate: actingDonor.lastDonationDate,
+                unavailableUntil: actingDonor.nextAvailableDate,
+                donorStatus: 'unavailable',
+                availability: false,
+              },
+            });
+          }
+        } catch (mirrorErr) {
+          console.error('Mirror cooldown to user (fulfilled) failed:', mirrorErr?.message || mirrorErr);
+        }
       }
     } catch (e) {
       console.error('Fulfill cooldown error:', e?.message || e);

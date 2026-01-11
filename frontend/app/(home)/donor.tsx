@@ -53,7 +53,12 @@ export default function DonorDashboard() {
   }, [role]);
 
   const statusBadge = useMemo(() => {
-    if (donorStatus === 'unavailable' && unavailableUntil) return `Unavailable until ${unavailableUntil.toLocaleDateString()}`;
+    if (donorStatus === 'unavailable' && unavailableUntil) {
+      const now = Date.now();
+      const ms = unavailableUntil.getTime() - now;
+      const days = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+      return `Unavailable until ${unavailableUntil.toLocaleDateString()} (${days} day${days !== 1 ? 's' : ''} remaining)`;
+    }
     if (donorStatus === 'available') return 'Available';
     return 'Not a donor';
   }, [donorStatus, unavailableUntil]);

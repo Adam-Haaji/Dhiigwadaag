@@ -75,7 +75,8 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
     if (form.units && (Number.isNaN(Number(form.units)) || Number(form.units) <= 0)) {
       e.units = 'Enter units as a positive number.';
     }
-    // Hospital optional for regular requests
+    // Require hospital name so donors can identify the facility
+    if (!form.hospitalName.trim()) e.hospitalName = 'Hospital name is required.';
     if (!form.location) e.location = 'Please select a location.';
     if (!/^\+?[0-9()\-\s]{7,}$/.test(form.phone.trim())) e.phone = 'Enter a valid contact phone.';
     if (!form.urgency) e.urgency = 'Please select urgency.';
@@ -105,13 +106,16 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       }
 
       // Create the request in backend
-      const payload: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical' } = {
+      const payload: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; hospitalName?: string; contactPhone?: string; notes?: string } = {
         patientName: form.patientName.trim(),
         bloodType: String(form.bloodType),
         location: String(form.location),
         units: Number(form.units || '1'),
         // Backend normalizes to 'Normal' or 'Critical'; send title case
         urgency: String(form.urgency || 'normal').toLowerCase() === 'critical' ? 'Critical' : 'Normal',
+        hospitalName: form.hospitalName.trim() || undefined,
+        contactPhone: form.phone.trim() || undefined,
+        notes: form.notes?.trim() || undefined,
       };
       try {
         const created = await api.createRequest(payload);

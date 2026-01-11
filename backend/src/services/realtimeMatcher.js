@@ -103,7 +103,7 @@ export async function onRequestCreated(reqDocLike) {
       await req.save();
       // Reserve donor
       if (donor._src === 'User') {
-        await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 3*24*60*60*1000) } }).catch(()=>{});
+        await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 90*24*60*60*1000) } }).catch(()=>{});
       } else {
         await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id, availabilityStatus: 'unavailable' } }).catch(()=>{});
       }
@@ -142,7 +142,7 @@ export async function onRequestCreated(reqDocLike) {
     await req.save();
     // Reserve donor
     if (donor._src === 'User') {
-      await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 3*24*60*60*1000) } }).catch(()=>{});
+      await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 90*24*60*60*1000) } }).catch(()=>{});
     } else {
       await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id, availabilityStatus: 'unavailable' } }).catch(()=>{});
     }

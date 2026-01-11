@@ -12,15 +12,39 @@ function computeMenus(role) {
 
 export const signup = async (req, res) => {
   try {
-    let { name, email, password } = req.body;
+    let { name, email, password, phone, bloodType, role, location } = req.body || {};
     const normEmail = (email || '').trim().toLowerCase();
     email = normEmail;
     name = (name || '').trim();
+    phone = typeof phone === 'string' ? phone.trim() : undefined;
+    location = typeof location === 'string' ? location.trim() : undefined;
+    // Normalize blood type to canonical format if it looks like one
+    const bt = typeof bloodType === 'string' ? bloodType.trim().toUpperCase() : undefined;
+    const btPattern = /^(A|B|AB|O)[+-]$/;
+    if (bt && !btPattern.test(bt)) {
+      return res.status(400).json({ error: 'Invalid blood type' });
+    }
+    // Basic phone format check (matches schema: 9-12 digits)
+    if (phone && !/^\d{9,12}$/.test(phone)) {
+      return res.status(400).json({ error: 'Enter a valid phone number' });
+    }
 
     const existing = await User.findOne({ email: normEmail });
     if (existing) return res.status(400).json({ error: 'Email already exists' });
     const hashed = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email: normEmail, password: hashed, role: 'none' });
+    // Accept optional fields on signup so profile shows phone and blood type immediately
+    let finalRole = 'none';
+    const r = String(role || '').toLowerCase();
+    if (['donor','requester','both','admin'].includes(r)) finalRole = r;
+    const user = await User.create({
+      name,
+      email: normEmail,
+      password: hashed,
+      role: finalRole,
+      phone: phone || undefined,
+      bloodType: bt || undefined,
+      location: location || undefined,
+    });
     res.status(201).json({ message: 'Signup successful' });
   } catch (err) {
     res.status(500).json({ error: err.message });

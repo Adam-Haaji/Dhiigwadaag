@@ -289,7 +289,7 @@ export const api = {
   donorsMeta: () => request('GET', '/api/donors/meta'),
   getDonorProfile: (id: string) => request('GET', `/api/donors/${encodeURIComponent(id)}`),
   // requests
-  createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; }) => request('POST', '/api/requests', data),
+  createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; hospitalName?: string; contactPhone?: string; notes?: string; }) => request('POST', '/api/requests', data),
   listRequests: () => request('GET', '/api/requests'),
   listMyMatches: () => request('GET', '/api/requests/matches/me'),
   getRequest: (id: string) => request('GET', `/api/requests/${id}`),

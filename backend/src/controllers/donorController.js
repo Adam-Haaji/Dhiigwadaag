@@ -149,7 +149,7 @@ export const registerDonor = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const { age, weightKg, gender, hb, bloodType, location } = req.body || {};
+    const { age, weightKg, gender, hb, bloodType, location, phone, email } = req.body || {};
     if ([age, weightKg, gender, hb, bloodType, location].some(v => v === undefined || v === null || String(v).trim() === '')) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
@@ -160,14 +160,26 @@ export const registerDonor = async (req, res) => {
     const lastDonationDate = user.lastDonationDate;
     const elig = evaluateEligibility({ age: ageNum, weightKg: weightNum, gender, hb: hbNum, lastDonationDate });
 
+    // If phone/email provided in eligibility registration, validate now (optional fields)
+    let newPhone = typeof phone === 'string' ? phone.trim() : undefined;
+    if (newPhone && !/^[0-9+\-()\s]{6,20}$/.test(newPhone)) {
+      return res.status(400).json({ success: false, message: 'Invalid phone format' });
+    }
+    let newEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+    if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return res.status(400).json({ success: false, message: 'Invalid email format' });
+    }
+
     if (!elig.eligible) {
       user.donorStatus = 'ineligible';
       user.ineligibilityReason = elig.reason;
       // Role transition per spec
       user.role = (user.role === 'requester') ? 'both' : 'none';
       user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
-      if (bloodType) user.bloodType = bloodType;
+      if (bloodType) user.bloodType = String(bloodType).toUpperCase();
       if (location) user.location = location;
+      if (newPhone) user.phone = newPhone;
+      if (newEmail) user.email = newEmail;
       await user.save();
       await DonorEligibilityLog.create({
         user: user._id,
@@ -189,8 +201,10 @@ export const registerDonor = async (req, res) => {
     user.ineligibilityReason = null;
     user.role = (user.role === 'requester') ? 'both' : 'donor';
     user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
-    if (bloodType) user.bloodType = bloodType;
+    if (bloodType) user.bloodType = String(bloodType).toUpperCase();
     if (location) user.location = location;
+    if (newPhone) user.phone = newPhone;
+    if (newEmail) user.email = newEmail;
     await user.save();
     await DonorEligibilityLog.create({
       user: user._id,

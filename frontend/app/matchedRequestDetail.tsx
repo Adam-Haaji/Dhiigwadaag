@@ -11,7 +11,7 @@ import useAuth from '@/hooks/useAuth';
 
 export default function MatchedRequestDetail() {
   const { id, mode } = useLocalSearchParams<{ id: string; mode?: 'donor'|'requester' }>();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { isDark } = useTheme();
   const [request, setRequest] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -191,6 +191,12 @@ export default function MatchedRequestDetail() {
     try {
       await api.completeDonation(String(id));
       await load();
+      // Refresh current user profile so donor status & cooldown update in UI
+      try {
+        const me = await api.me();
+        const token = user?.token;
+        if (me && setUser) await setUser({ token, user: me });
+      } catch {}
       Alert.alert('Thank you', 'Donation recorded successfully.');
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not complete');

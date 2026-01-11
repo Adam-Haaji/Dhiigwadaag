@@ -7,6 +7,10 @@ const requestSchema = new mongoose.Schema({
   patientName: { type: String, required: true },
   bloodType: { type: String, required: true },
   location: { type: String, required: true },
+  // Optional hospital name where the patient is admitted
+  hospitalName: { type: String },
+  // Optional primary contact phone for the request
+  contactPhone: { type: String },
   urgency: { type: String, enum: ['Normal', 'Urgent', 'Critical'], required: true },
   // Units of blood requested (bags)
   units: { type: Number, min: 1, default: 1 },
