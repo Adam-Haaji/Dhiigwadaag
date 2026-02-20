@@ -10,24 +10,6 @@ export const getProfile = async (req, res) => {
   }
 };
 
-export const switchRole = async (req, res) => {
-  try {
-    const { newRole } = req.body;
-    const allowed = ['donor', 'requester', 'both'];
-    if (!allowed.includes(String(newRole).toLowerCase())) {
-      return res.status(400).json({ error: 'invalid_role' });
-    }
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { role: String(newRole).toLowerCase() },
-      { new: true }
-    ).select('-password');
-    if (!user) return res.status(404).json({ error: 'Not found' });
-    res.json(user);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
 
 export const updateProfile = async (req, res) => {
   try {
@@ -86,10 +68,29 @@ export const changePassword = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+export const selectRole = async (req, res) => {
+  try {
+    // Role selection via Users collection is disabled to enforce collection separation
+    return res.status(403).json({ error: 'forbidden_role_selection_disabled' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
+// Legacy endpoint now blocked to prevent manual switching after initial selection
+export const switchRole = async (req, res) => {
+  try {
+    return res.status(403).json({ error: 'forbidden_role_switch_disabled' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+import Donor from '../models/Donor.js';
 export const listDonors = async (req, res) => {
   try {
-    const donors = await User.find({ role: 'Donor', availability: true });
+    // Return donors strictly from Donor collection to respect separation
+    const donors = await Donor.find({}).select('_id fullName email phone district bloodGroup availabilityStatus createdAt updatedAt user').lean();
     res.json(donors);
   } catch (err) {
     res.status(500).json({ error: err.message });

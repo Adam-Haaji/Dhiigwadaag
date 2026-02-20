@@ -1,12 +1,9 @@
 import mongoose from 'mongoose';
 import { yearsBetween, addDays } from '../utils/dateUtils.js';
+import { LOCATIONS } from '../utils/locations.js';
 
-const districts = [
-  'Abdiaziz', 'Bondhere', 'Daynile', 'Dharkenley', 'Hamar Jajab', 'Hamar Weyne',
-  'Hodan', 'Howlwadag', 'Howlwadaag', 'Karaan', 'Kaaran', 'Shangani', 'Shibis',
-  'Wadajir', 'Wadajir (Medina)', 'Waberi', 'Wartanabada', 'Wardhiigley (Warta Nabadda)',
-  'Yaqshid', 'Garasbaley', 'Kahda',
-];
+// Use canonical locations list from locations.js to ensure consistency
+const districts = LOCATIONS;
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -28,7 +25,29 @@ const donorSchema = new mongoose.Schema(
     gender: { type: String, enum: ['male', 'female'], required: true },
     phone: { type: String, required: true, trim: true, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
     email: { type: String, required: true, lowercase: true, trim: true, match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email format'] },
-    district: { type: String, enum: districts, required: true },
+    district: { 
+      type: String, 
+      required: true,
+      trim: true,
+      // Validate and normalize to match canonical case from locations.js
+      validate: {
+        validator: function(v) {
+          if (!v) return false;
+          const normalized = String(v).trim();
+          // Case-insensitive match against canonical list
+          return districts.some(d => d.toLowerCase() === normalized.toLowerCase());
+        },
+        message: 'District must be one of: ' + districts.join(', ')
+      },
+      // Normalize to canonical case
+      set: (v) => {
+        if (!v) return v;
+        const normalized = String(v).trim();
+        // Find matching location (case-insensitive) and return canonical case
+        const match = districts.find(d => d.toLowerCase() === normalized.toLowerCase());
+        return match || normalized;
+      }
+    },
     bloodGroup: { type: String, enum: bloodGroups, required: true },
     weightKg: { type: Number, required: true, min: 50 },
     consentGiven: { type: Boolean, required: true },
@@ -39,7 +58,34 @@ const donorSchema = new mongoose.Schema(
       phone: { type: String, required: true, trim: true, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
     },
 
-    lastDonationDate: { type: Date, required: true },
+    lastDonationDate: { type: Date, required: false }, // null = never donated; set only on Fulfilled / "I have donated"
+    medicalCondition: {
+      type: String,
+      enum: [
+        'None',
+        'Malaria',
+        'HIV',
+        'Hepatitis',
+        'Tuberculosis',
+        'Heart Disease',
+        'Diabetes',
+        'Cancer',
+        'Asthma',
+        'High Blood Pressure',
+        'Recent Surgery',
+        'Pregnant',
+        'Other'
+      ],
+      default: 'None',
+      required: true,
+    },
+    // Eligibility ML model fields (ELIGIBLE/NOT_ELIGIBLE from ML; UNKNOWN on API failure; pending = in progress)
+    eligibilityStatus: { type: String, enum: ['pending', 'eligible', 'not_eligible', 'ELIGIBLE', 'NOT_ELIGIBLE', 'UNKNOWN'], default: 'pending' },
+    eligibilityReason: { type: String },
+    eligibilityConfidence: { type: Number },
+    eligibilityConfidencePercent: { type: Number },
+    eligibilityCheckedAt: { type: Date },
+    eligibilityRaw: { type: mongoose.Schema.Types.Mixed },
     availabilityStatus: { type: String, enum: ['available', 'unavailable'], default: 'available', required: true },
     // Derived/operational fields
     isActive: { type: Boolean, default: true }, // false if donated within last 3 months

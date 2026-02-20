@@ -95,16 +95,6 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       return;
     }
     try {
-      // Ensure requester role before creating request
-      const role = String(user?.user?.role || '').toLowerCase();
-      if (role !== 'requester') {
-        try {
-          const updated = await api.switchRole('requester');
-          const token = user?.token;
-          await setUser({ token, user: updated });
-        } catch {}
-      }
-
       // Create the request in backend
       const payload: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; hospitalName?: string; contactPhone?: string; notes?: string } = {
         patientName: form.patientName.trim(),
@@ -117,24 +107,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
         contactPhone: form.phone.trim() || undefined,
         notes: form.notes?.trim() || undefined,
       };
-      try {
-        const created = await api.createRequest(payload);
-      } catch (e1: any) {
-        const msg = e1?.message || '';
-        // If role guard blocked, try switching and retry once
-        if (msg.includes('forbidden_requester_only') || msg.includes('Forbidden') || msg.includes('403')) {
-          try {
-            const updated = await api.switchRole('requester');
-            const token = user?.token;
-            await setUser({ token, user: updated });
-            const created2 = await api.createRequest(payload);
-          } catch (e2: any) {
-            throw e2;
-          }
-        } else {
-          throw e1;
-        }
-      }
+      await api.createRequest(payload);
       onSubmitSuccess?.(form);
       // Navigate back to Request dashboard
       router.replace('/(home)/request');
@@ -185,10 +158,10 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       paddingHorizontal: moderateScale(spacing.lg),
       paddingVertical: moderateScale(spacing.lg),
       shadowColor: semanticColors.cardShadow,
-      shadowOpacity: 1,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
       borderWidth: 1,
       borderColor: semanticColors.borderSubtle,
       backgroundColor: semanticColors.bgSurface,
@@ -218,11 +191,6 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: semanticColors.cardShadow,
-      shadowOpacity: 1,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
     },
     submitBtnActiveAnyway: {},
     submitText: { color: semanticColors.textInverse, fontFamily: fontFamilies.bold, fontSize: 16 },

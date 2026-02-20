@@ -12,7 +12,8 @@
     "data:sync-matches": "node ./scripts/sync-matches.mjs",
     "data:sync-matches:write": "node ./scripts/sync-matches.mjs --write",
     "data:backfill-donors": "node ./scripts/backfill-donor-computed.mjs",
-    "data:backfill-donors:write": "node ./scripts/backfill-donor-computed.mjs --write"
+    "data:backfill-donors:write": "node ./scripts/backfill-donor-computed.mjs --write",
+    "data:migrate-role-separation": "node ./scripts/migrate-role-separation.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

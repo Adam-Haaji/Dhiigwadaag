@@ -89,6 +89,12 @@ export const createRequest = async (req, res) => {
     // Validate units (require at least 1)
     if (!Number.isFinite(units) || units < 1) units = 1;
 
+    // Calculate expiresAt: Critical = 24 hours, Normal/Urgent = 48 hours
+    const now = new Date();
+    const isCritical = String(urgency).toLowerCase() === 'critical';
+    const expiryHours = isCritical ? 24 : 48;
+    const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000);
+
     const request = await Request.create({
       patientName,
       bloodType,
@@ -101,26 +107,31 @@ export const createRequest = async (req, res) => {
       requester: req.body?.requester || (requester
         ? { name: requester.name, phone: requester.phone, email: requester.email }
         : undefined),
+      expiresAt,
     });
 
-    // Auto-upgrade the user's role to requester/both upon creating a request
+    // Role upgrade disabled: keep main user role unchanged for strict requester flow
     try {
       const userDoc = await User.findById(req.user?.id);
       if (userDoc) {
-        const current = String(userDoc.role || '').toLowerCase();
-        userDoc.role = (current === 'donor' || current === 'both') ? 'both' : 'requester';
-        await userDoc.save();
+        // No-op: preserve existing role
       }
     } catch (roleErr) {
-      console.warn('Role upgrade failed:', roleErr?.message || roleErr);
+      console.warn('Role check failed:', roleErr?.message || roleErr);
     }
 
     // Broadcast a notification to EVERY user in the app so all users see the new request
     try {
-      // Notify only donors with same blood type; optionally in same area
-      const donorUsers = await User.find({ role: 'Donor', bloodType: bloodType }).select('_id location').lean();
-      const notifications = donorUsers.map((u) => ({
-        userId: u._id,
+      // Notify donors with same blood type from Donor collection (not User collection)
+      const Donor = (await import('../models/Donor.js')).default;
+      const donorDocs = await Donor.find({ bloodGroup: bloodType, availabilityStatus: 'available', isActive: true })
+        .populate('user', '_id')
+        .select('user district')
+        .lean();
+      const notifications = donorDocs
+        .filter(d => d.user && d.user._id) // Only donors with valid user reference
+        .map((d) => ({
+        userId: d.user._id,
         title: 'New Blood Request',
         message: `A new request for blood type ${bloodType} has been created near your location${hospitalName ? ` at ${hospitalName}` : ''}. Please check if you can help.`,
         type: 'request',
@@ -275,6 +286,25 @@ export const getRequestById = async (req, res) => {
   try {
     const { id } = req.params;
     const viewerRole = String(req.user?.role || '').toLowerCase();
+    const userId = req.user?.id;
+    
+    // Check if user has a donor record (for role separation)
+    let hasDonorRecord = false;
+    let userDonorId = null;
+    try {
+      const userDonor = await Donor.findOne({ user: userId }).select('_id').lean();
+      if (userDonor) {
+        hasDonorRecord = true;
+        userDonorId = userDonor._id;
+      }
+    } catch {}
+    
+    // Check if there's a notification for this request (allows access via notification)
+    let hasNotification = false;
+    try {
+      hasNotification = await Notification.exists({ userId, 'meta.requestId': id }).catch(() => false);
+    } catch {}
+    
     // Try legacy Request first
     let doc = await Request.findById(id)
       .populate('requesterId', 'name email phone bloodType location')
@@ -282,17 +312,24 @@ export const getRequestById = async (req, res) => {
       .populate('contactedBy.donorId');
     if (doc) {
       // Determine ownership/match access
-      const isOwner = String(doc.requesterId?._id || doc.requesterId) === String(req.user?.id);
+      const isOwner = String(doc.requesterId?._id || doc.requesterId) === String(userId);
       let isMatchedDonorUser = false;
       try {
         if (doc.matchedDonorId) {
           // Support legacy shape where matchedDonorId can be a Donor _id or a User _id
-          const md = String(doc.matchedDonorId);
-          if (md === String(req.user?.id)) {
+          const md = doc.matchedDonorId;
+          const mdId = typeof md === 'object' ? String(md._id || md) : String(md);
+          if (mdId === String(userId)) {
             isMatchedDonorUser = true;
           } else {
-            const donor = await Donor.findById(doc.matchedDonorId).select('user');
-            isMatchedDonorUser = donor?.user && String(donor.user) === String(req.user?.id);
+            // Check if matchedDonorId is a Donor ID and matches user's donor record
+            if (userDonorId && mdId === String(userDonorId)) {
+              isMatchedDonorUser = true;
+            } else {
+              // Try to find donor by ID and check if it matches user
+              const donor = await Donor.findById(mdId).select('user').lean();
+              isMatchedDonorUser = donor?.user && String(donor.user) === String(userId);
+            }
           }
         }
       } catch {}
@@ -302,7 +339,9 @@ export const getRequestById = async (req, res) => {
       }
 
       // Fallback: sanitized donor view (hide requester contact info)
-      if (viewerRole === 'donor') {
+      // Allow access if user has donor record OR has notification for this request
+      const isDonor = hasDonorRecord || viewerRole === 'donor' || viewerRole === 'both';
+      if (isDonor || hasNotification) {
         const sanitized = {
           _id: doc._id,
           patientName: doc.patientName,
@@ -327,7 +366,8 @@ export const getRequestById = async (req, res) => {
     // Fallback: Try new BloodRequest and map to legacy shape expected by old detail screen
     const br = await BloodRequest.findById(id)
       .populate('requesterId', 'name email phone bloodType location')
-      .populate('donorId', 'fullName phone bloodGroup district availabilityStatus user');
+      .populate('donorId', 'fullName phone email bloodGroup district availabilityStatus user')
+      .populate('fulfilledBy', 'fullName phone email bloodGroup district');
     if (!br) return res.status(404).json({ error: 'Request not found' });
 
     // Map BloodRequest -> legacy Request-like response
@@ -354,22 +394,65 @@ export const getRequestById = async (req, res) => {
         location: br.donorId.district,
         availability: br.donorId.availabilityStatus === 'available',
       } : undefined,
+      // Also include donor info directly for easier access
+      // Prefer fulfilledBy if available (for fulfilled requests), otherwise use donorId
+      donor: (br.fulfilledBy || br.donorId) ? {
+        _id: (br.fulfilledBy || br.donorId)?._id,
+        fullName: (br.fulfilledBy || br.donorId)?.fullName,
+        name: (br.fulfilledBy || br.donorId)?.fullName,
+        phone: (br.fulfilledBy || br.donorId)?.phone,
+        email: (br.fulfilledBy || br.donorId)?.email,
+        bloodGroup: (br.fulfilledBy || br.donorId)?.bloodGroup,
+        bloodType: (br.fulfilledBy || br.donorId)?.bloodGroup,
+        district: (br.fulfilledBy || br.donorId)?.district,
+        location: (br.fulfilledBy || br.donorId)?.district,
+        availabilityStatus: br.donorId?.availabilityStatus,
+      } : undefined,
+      donorId: (br.fulfilledBy || br.donorId) ? {
+        _id: (br.fulfilledBy || br.donorId)?._id,
+        fullName: (br.fulfilledBy || br.donorId)?.fullName,
+        name: (br.fulfilledBy || br.donorId)?.fullName,
+        phone: (br.fulfilledBy || br.donorId)?.phone,
+        email: (br.fulfilledBy || br.donorId)?.email,
+        bloodGroup: (br.fulfilledBy || br.donorId)?.bloodGroup,
+        bloodType: (br.fulfilledBy || br.donorId)?.bloodGroup,
+        district: (br.fulfilledBy || br.donorId)?.district,
+        location: (br.fulfilledBy || br.donorId)?.district,
+      } : undefined,
+      fulfilledBy: br.fulfilledBy ? {
+        _id: br.fulfilledBy._id,
+        fullName: br.fulfilledBy.fullName,
+        name: br.fulfilledBy.fullName,
+        phone: br.fulfilledBy.phone,
+        email: br.fulfilledBy.email,
+        bloodGroup: br.fulfilledBy.bloodGroup,
+        bloodType: br.fulfilledBy.bloodGroup,
+        district: br.fulfilledBy.district,
+        location: br.fulfilledBy.district,
+      } : undefined,
       matchedDonorUser: br.donorId?.user || undefined,
       createdAt: br.createdAt,
       updatedAt: br.updatedAt,
     };
     // Only requester (owner) or matched donor user may view mapped BR
-    const isOwner = String(mapped.requesterId?._id || mapped.requesterId) === String(req.user?.id);
+    const isOwner = String(mapped.requesterId?._id || mapped.requesterId) === String(userId);
     let isMatchedDonorUser = false;
     try {
-      if (br.donorId?.user) isMatchedDonorUser = String(br.donorId.user) === String(req.user?.id);
+      if (br.donorId?.user) {
+        isMatchedDonorUser = String(br.donorId.user) === String(userId);
+      } else if (br.donorId?._id && userDonorId) {
+        // Check if the matched donor ID matches user's donor record
+        isMatchedDonorUser = String(br.donorId._id) === String(userDonorId);
+      }
     } catch {}
     if (isOwner || isMatchedDonorUser || viewerRole === 'admin') {
       return res.json(mapped);
     }
 
     // Sanitized donor view for BloodRequest mapping
-    if (viewerRole === 'donor') {
+    // Allow access if user has donor record OR has notification for this request
+    const isDonor = hasDonorRecord || viewerRole === 'donor' || viewerRole === 'both';
+    if (isDonor || hasNotification) {
       const sanitized = {
         _id: mapped._id,
         patientName: mapped.patientName,
@@ -381,7 +464,7 @@ export const getRequestById = async (req, res) => {
         createdAt: mapped.createdAt,
         updatedAt: mapped.updatedAt,
         requester: mapped.requesterId ? { name: mapped.requesterId.name || 'Requester' } : undefined,
-        contactHidden: true,
+        contactHidden: !isMatchedDonorUser,
         viewer: 'donor',
       };
       return res.json(sanitized);
@@ -418,15 +501,29 @@ export const getMatchedDonorForRequest = async (req, res) => {
     }
 
     // Fallback: BloodRequest
+    // For fulfilled requests, prefer fulfilledBy over donorId
     const br = await BloodRequest.findById(id)
       .populate('requesterId', '_id')
       .populate('donorId', 'fullName phone email district bloodGroup')
+      .populate('fulfilledBy', 'fullName phone email district bloodGroup')
       .lean();
     if (!br) return res.status(404).json({ error: 'Request not found' });
 
     const isOwner = String((br.requesterId && (br.requesterId._id || br.requesterId)) || '') === String(userId);
     const hasNoti = await Notification.exists({ userId, 'meta.requestId': br._id }).catch(() => null);
     if (!isOwner && !hasNoti) return res.status(403).json({ error: 'Forbidden' });
+
+    // For fulfilled requests, use fulfilledBy if available (has complete donor info)
+    if (br.fulfilledBy && (br.status === 'fulfilled' || br.status === 'completed' || br.status === 'donated')) {
+      const donor = {
+        name: br.fulfilledBy.fullName || br.fulfilledBy.name,
+        phone: br.fulfilledBy.phone,
+        email: br.fulfilledBy.email,
+        location: br.fulfilledBy.district,
+        bloodType: br.fulfilledBy.bloodGroup,
+      };
+      return res.json({ success: true, donor });
+    }
 
     const donor = await pickMatchedDonorContactFromBloodRequest(br);
     if (!donor) return res.status(404).json({ error: 'Donor not assigned' });
@@ -520,7 +617,14 @@ export const respondToRequest = async (req, res) => {
             message: `Your blood request has been fulfilled successfully${donorId ? ' by a donor' : ''}.`,
             type: 'request',
             urgent: false,
-            meta: { requestId: doc._id, status: 'Fulfilled', source: 'request' },
+            meta: {
+              type: 'REQUEST_FULFILLED',
+              requestId: doc._id,
+              matchId: doc._id,
+              donorId: donorId || null,
+              status: 'Fulfilled',
+              source: 'request',
+            },
           });
         } else {
           await Notification.create({
@@ -544,45 +648,73 @@ export const respondToRequest = async (req, res) => {
 };
 
 // PUT /api/requests/:id/mark-fulfilled
+// IMPORTANT: This sets donor to unavailable for 90 days. Only call this when donor has actually donated.
 export const markFulfilled = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await Request.findById(id)
+    // Try legacy Request first
+    let doc = await Request.findById(id)
       .populate('requesterId', 'name email phone role')
       .populate('matchedDonorId', 'name email phone')
       .populate('contactedBy.donorId');
+    let isBloodRequest = false;
+    
+    // If not found, try BloodRequest
+    if (!doc) {
+      const BloodRequest = (await import('../models/BloodRequest.js')).default;
+      doc = await BloodRequest.findById(id)
+        .populate('requesterId', 'name email phone role')
+        .populate('donorId', 'fullName phone email bloodGroup district');
+      isBloodRequest = !!doc;
+    }
+    
     if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
-    if (doc.status === 'Expired') {
-      return res.status(400).json({ success: false, message: 'Cannot fulfill an expired request' });
+    
+    // Check if already fulfilled (handle both models)
+    const currentStatus = String(doc.status || '').toLowerCase();
+    if (currentStatus === 'fulfilled' || currentStatus === 'completed' || currentStatus === 'donated') {
+      return res.json({ success: true, message: 'Request already fulfilled', data: doc });
     }
 
     // Authorization: requester, admin, or the matched donor can mark fulfilled
+    // CRITICAL: For dual-role users (requester+donor), we must find their donor record
+    // even if they are the requester, so we can update availability status on fulfillment
     let actingDonor = null;
     if (req.user) {
       const isOwner = doc.requesterId && String(doc.requesterId._id || doc.requesterId) === String(req.user.id);
       const isAdmin = String(req.user.role || '').toLowerCase() === 'admin';
+      
+      // CRITICAL: Always try to find donor record for dual-role users
+      // This ensures availability status is updated even when requester fulfills their own request
+      try {
+        actingDonor = await Donor.findOne({ user: req.user.id });
+      } catch (_) {}
+      
       if (!isOwner && !isAdmin) {
-        // Allow donor linked to current user
-        try {
-          actingDonor = await Donor.findOne({ user: req.user.id });
-        } catch (_) {}
+        // Not owner and not admin - must be the matched donor
         if (!actingDonor) {
-          // No Donor profile found. Allow fulfillment if this user is the matched donor.
-          if (doc.matchedDonorId && String(doc.matchedDonorId._id || doc.matchedDonorId) === String(req.user.id)) {
+          // For legacy Request: check if user is the matched donor (even without Donor document)
+          if (!isBloodRequest && doc.matchedDonorId && String(doc.matchedDonorId._id || doc.matchedDonorId) === String(req.user.id)) {
             // proceed without actingDonor document; skip donor-specific cooldown later
+            actingDonor = null; // Explicitly set to null since no Donor document exists
           } else {
             return res.status(403).json({ success: false, message: 'Forbidden: not allowed to fulfill this request' });
           }
+        } else {
+          // For BloodRequest: ensure this donor is the matched donor
+          if (isBloodRequest && doc.donorId) {
+            if (String(doc.donorId._id || doc.donorId) !== String(actingDonor._id)) {
+              return res.status(403).json({ success: false, message: 'Forbidden: you are not the matched donor for this request' });
+            }
+          }
+          // For legacy Request: check if user is the matched donor
+          else if (!isBloodRequest && doc.matchedDonorId && String(doc.matchedDonorId._id || doc.matchedDonorId) !== String(req.user.id)) {
+            return res.status(403).json({ success: false, message: 'Forbidden: you are not the matched donor for this request' });
+          }
         }
       }
-
-      // If a matched donor is set, enforce only that donor's user (or admin) can fulfill
-      if (doc.matchedDonorId && !isAdmin) {
-        const matchedUserId = String(doc.matchedDonorId._id || doc.matchedDonorId);
-        if (String(req.user.id) !== matchedUserId) {
-          return res.status(403).json({ success: false, message: 'Forbidden: you are not the matched donor for this request' });
-        }
-      }
+      // If isOwner (requester fulfilling their own request) and actingDonor exists (dual-role user),
+      // we keep actingDonor so availability status can be updated correctly
     }
 
     if (doc.status === 'Fulfilled') {
@@ -604,24 +736,65 @@ export const markFulfilled = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Eligibility verification failed' });
     }
   }
-  doc.status = 'Fulfilled';
+  // Update status to fulfilled (handle both models)
+  doc.status = isBloodRequest ? 'fulfilled' : 'Fulfilled';
   doc.fulfilledAt = new Date();
-  doc.fulfilledDate = doc.fulfilledAt;
-  if (actingDonor) doc.fulfilledBy = actingDonor._id;
-    await doc.save();
+  if (!isBloodRequest) doc.fulfilledDate = doc.fulfilledAt;
+  if (actingDonor) {
+    if (isBloodRequest) {
+      doc.fulfilledBy = actingDonor._id;
+    } else {
+      doc.fulfilledBy = actingDonor._id;
+    }
+  }
+  await doc.save();
 
     // Notify requester and contacted donors that request is fulfilled
     try {
       const notifications = [];
       if (doc.requesterId) {
         const requesterUserId = typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId;
+        // Get donor details for requester notification
+        let donorDetails = {};
+        if (actingDonor) {
+          donorDetails = {
+            donorName: actingDonor.fullName || '',
+            donorPhone: actingDonor.phone || '',
+            donorDistrict: actingDonor.district || '',
+            donorBloodGroup: actingDonor.bloodGroup || '',
+          };
+        } else if (isBloodRequest && doc.donorId) {
+          // For BloodRequest, try to get donor from populated field or fetch
+          const donorId = doc.donorId?._id || doc.donorId;
+          if (donorId) {
+            const Donor = (await import('../models/Donor.js')).default;
+            const donorDoc = await Donor.findById(donorId).select('fullName phone district bloodGroup').lean().catch(() => null);
+            if (donorDoc) {
+              donorDetails = {
+                donorName: donorDoc.fullName || '',
+                donorPhone: donorDoc.phone || '',
+                donorDistrict: donorDoc.district || '',
+                donorBloodGroup: donorDoc.bloodGroup || '',
+              };
+            }
+          }
+        }
+        
         notifications.push({
           userId: requesterUserId,
           title: 'Request Fulfilled',
-          message: `Your request for ${doc.bloodType} has been fulfilled${actingDonor ? ` by ${actingDonor.fullName || 'a donor'}` : ''}. Thank you!`,
+          message: `Your request for ${doc.bloodType} has been fulfilled${donorDetails.donorName || actingDonor?.fullName || ' by a donor'}. Thank you!`,
           type: 'request',
           urgent: false,
-          meta: { requestId: doc._id, status: 'Fulfilled', source: 'request' },
+          meta: {
+            type: 'REQUEST_FULFILLED',
+            requestId: doc._id,
+            matchId: doc._id,
+            donorId: actingDonor?._id || (doc.fulfilledBy && (doc.fulfilledBy._id || doc.fulfilledBy)) || null,
+            status: 'Fulfilled',
+            source: 'request',
+            ...donorDetails,
+          },
         });
       }
       // Inform all contacted donors (map Donor -> User)
@@ -646,15 +819,24 @@ export const markFulfilled = async (req, res) => {
       console.error('Notify (fulfilled) error:', notifyErr?.message || notifyErr);
     }
 
-    // If a donor is acting, apply cooldown
+    // CRITICAL: If a donor is acting, apply cooldown and set to unavailable
+    // This is the ONLY place where donor availabilityStatus changes to 'unavailable'
+    // Applies to both single-role donors and dual-role (donor+requester) users
+    // For dual-role users fulfilling their own request, actingDonor is found above
     try {
       if (actingDonor) {
+        // CRITICAL: Update donor availability status to 'unavailable' on fulfillment
+        // This applies to ALL donors who fulfill, including dual-role (requester+donor) users
+        // This ensures that when a requester who is also a donor fulfills their own request,
+        // their donor availability status is correctly updated to 'unavailable'
         actingDonor.lastDonationDate = new Date();
         actingDonor.nextAvailableDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
         actingDonor.isActive = false;
-        actingDonor.availabilityStatus = 'unavailable';
+        actingDonor.availabilityStatus = 'unavailable'; // CRITICAL: Only changed here, not on accept
         await actingDonor.save();
+        
         // Mirror cooldown to linked User so mobile UI reflects status immediately
+        // This ensures both Donor document and User document are in sync
         try {
           const linkedUserId = actingDonor.user || (req.user && req.user.id);
           if (linkedUserId) {
@@ -671,6 +853,9 @@ export const markFulfilled = async (req, res) => {
           console.error('Mirror cooldown to user (fulfilled) failed:', mirrorErr?.message || mirrorErr);
         }
       }
+      // Note: If actingDonor is null, either:
+      // 1. User is requester-only (no Donor record) - request fulfilled, no donor status to update
+      // 2. Legacy user matched by User._id without Donor document - handled separately
     } catch (e) {
       console.error('Fulfill cooldown error:', e?.message || e);
     }
@@ -808,6 +993,7 @@ export const listMatchesForMe = async (req, res) => {
 };
 
 // PATCH /api/requests/:id/accept - donor accepts matched request
+// IMPORTANT: Accepting does NOT change donor availability. Only fulfillment ("I Have Donated") sets donor to unavailable.
 export const acceptDonation = async (req, res) => {
   try {
     const { id } = req.params;
@@ -816,30 +1002,61 @@ export const acceptDonation = async (req, res) => {
     // If a Donor document exists, great; otherwise proceed using the authenticated user.
     const actingDonor = await Donor.findOne({ user: req.user?.id }).select('_id user');
 
-    const doc = await Request.findById(id).populate('requesterId', 'name email phone');
+    // Try legacy Request first
+    let doc = await Request.findById(id).populate('requesterId', 'name email phone');
+    let isBloodRequest = false;
+    
+    // If not found, try BloodRequest
+    if (!doc) {
+      const BloodRequest = (await import('../models/BloodRequest.js')).default;
+      doc = await BloodRequest.findById(id).populate('requesterId', 'name email phone');
+      isBloodRequest = !!doc;
+    }
+    
     if (!doc) return res.status(404).json({ success: false, message: 'Request not found' });
-    if (doc.status !== 'Matched') {
+    
+    // Check status - allow both 'Matched' (legacy) and 'matched' (BloodRequest)
+    const currentStatus = String(doc.status || '').toLowerCase();
+    if (currentStatus !== 'matched') {
       return res.status(400).json({ success: false, message: 'Request is not in Matched state' });
     }
-    // Optionally ensure this donor is the matched donor if set
-    if (doc.matchedDonorId && String(doc.matchedDonorId) !== String(req.user.id)) {
+    
+    // For legacy Request: ensure this donor is the matched donor if set
+    if (!isBloodRequest && doc.matchedDonorId && String(doc.matchedDonorId) !== String(req.user.id)) {
       return res.status(403).json({ success: false, message: 'You are not the matched donor for this request' });
     }
+    
+    // For BloodRequest: ensure this donor is the matched donor if set
+    if (isBloodRequest && doc.donorId) {
+      const donor = await Donor.findOne({ user: req.user.id });
+      if (!donor || String(doc.donorId) !== String(donor._id)) {
+        return res.status(403).json({ success: false, message: 'You are not the matched donor for this request' });
+      }
+    }
 
-    doc.status = 'Accepted';
-    // Persist matched donor to current user to lock the pairing
-    doc.matchedDonorId = req.user.id;
+    // Update status to accepted (case-insensitive for both models)
+    doc.status = isBloodRequest ? 'accepted' : 'Accepted';
+    // For legacy Request: persist matched donor to current user to lock the pairing
+    if (!isBloodRequest) {
+      doc.matchedDonorId = req.user.id;
+    }
     await doc.save();
 
+    // CRITICAL: Do NOT change donor availabilityStatus here. 
+    // Donor remains 'available' until they click "I Have Donated" (fulfillment).
+    // This applies to both single-role donors and dual-role (donor+requester) users.
+    // We explicitly do NOT modify actingDonor.availabilityStatus here - it stays as-is.
+
     try {
-      if (doc.requesterId) {
+      const requesterId = doc.requesterId ? (typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId) : null;
+      if (requesterId) {
         await Notification.create({
-          userId: typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId,
+          userId: requesterId,
           title: 'Donor Accepted',
           message: 'A donor has accepted your request and is preparing to donate.',
           type: 'request',
           urgent: true,
-          meta: { requestId: doc._id, status: 'Accepted', source: 'request' },
+          meta: { requestId: doc._id, status: isBloodRequest ? 'accepted' : 'Accepted', source: isBloodRequest ? 'blood-request' : 'request' },
         });
       }
     } catch (e) { console.error('Notify accept error:', e?.message || e); }

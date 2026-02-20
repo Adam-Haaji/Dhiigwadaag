@@ -1,25 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import colors, { semanticColors } from "../constants/colors";
-import SelectFieldComponent from '../components/SelectField';
+import colors, { semanticColors, spacing, typography } from "../constants/colors";
+import AppInput from '@/components/AppInput';
+import AppButton from '@/components/AppButton';
+import SectionCard from '@/components/SectionCard';
 import apiClient from "../service/api";
 import { useTheme } from '@/context/ThemeContext';
 
 const Signup = () => {
   const router = useRouter();
-  const { control, handleSubmit, watch, formState: { errors, isValid, isSubmitting } } = useForm({ mode: 'onChange', defaultValues: { name: '', email: '', phone: '', bloodType: '', password: '', confirmPassword: '' } });
+  const { control, handleSubmit, watch, formState: { errors, isValid, isSubmitting } } = useForm({ mode: 'onChange', defaultValues: { name: '', email: '', phone: '', password: '', confirmPassword: '' } });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Auth hook not needed here (no immediate login after signup)
 
-  const onSubmit = async ({ name, email, phone, bloodType, password, confirmPassword: _confirmPassword }: any) => {
+  const onSubmit = async ({ name, email, phone, password, confirmPassword: _confirmPassword }: any) => {
     setError(null);
     setLoading(true);
     try {
-  await apiClient.signup({ name, email, password, bloodType, role: 'Requester', location: 'Unknown', phone });
+      // Create normal user (role: 'user') - they will choose Donor or Requester after login
+      await apiClient.signup({ name, email, password, role: 'user', location: 'Unknown', phone });
       // Do NOT auto-login; redirect user to login screen after successful signup
       alert('Account created successfully. Please login.');
       router.replace('/login');
@@ -29,10 +32,6 @@ const Signup = () => {
       setLoading(false);
     }
   };
-
-  const BLOOD_TYPES = [
-    'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-',
-  ].map(v => ({ label: v, value: v }));
 
   const { isDark } = useTheme();
   return (
@@ -45,84 +44,65 @@ const Signup = () => {
             <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Join our blood donation community</Text>
           </View>
 
-          <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }] }>
+          <SectionCard>
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Full Name *</Text>
               <Controller control={control} name="name"
                 rules={{ required: true, minLength: 3, pattern: /^[A-Za-z\s]+$/ }}
                 render={({ field }: any) => (
-                  <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your full name" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} />
+                  <AppInput label="Full Name *" placeholder="Enter your full name" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} />
                 )}
               />
               {errors?.name && <Text style={styles.err}>{errors.name.type === 'pattern' ? 'This field must contain letters only' : 'Name must be at least 3 characters'}</Text>}
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Email *</Text>
               <Controller control={control} name="email"
                 rules={{ required: true, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }}
                 render={({ field }: any) => (
-                  <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your email" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} autoCapitalize="none" keyboardType="email-address" />
+                  <AppInput label="Email *" placeholder="Enter your email" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} autoCapitalize="none" keyboardType="email-address" />
                 )}
               />
               {errors?.email && <Text style={styles.err}>Please enter a valid email address (example@gmail.com)</Text>}
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Phone Number *</Text>
               <Controller control={control} name="phone"
                 rules={{ required: true, pattern: /^\d{9,12}$/ }}
                 render={({ field }: any) => (
-                  <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your phone number" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} keyboardType="phone-pad" />
+                  <AppInput label="Phone Number *" placeholder="Enter your phone number" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} keyboardType="phone-pad" />
                 )}
               />
               {errors?.phone && <Text style={styles.err}>Enter a valid phone number</Text>}
             </View>
 
-            <View style={styles.inputContainer}>
-              <Controller
-                control={control}
-                name="bloodType"
-                rules={{ required: true }}
-                render={({ field }: any) => (
-                  <SelectFieldComponent
-                    label="Blood Type"
-                    required
-                    placeholder="Select blood type"
-                    value={field.value}
-                    options={BLOOD_TYPES}
-                    onChange={(v) => field.onChange(v)}
-                    error={errors?.bloodType ? 'Blood type is required' : undefined}
-                  />
-                )}
-              />
-            </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Password *</Text>
               <Controller control={control} name="password"
                 rules={{ required: true, pattern: /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/ }}
                 render={({ field }: any) => (
-                  <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Enter your password" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} secureTextEntry />
+                  <AppInput label="Password *" placeholder="Enter your password" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} secureTextEntry />
                 )}
               />
               {errors?.password && <Text style={styles.err}>Password must be at least 8 characters and include a number, uppercase letter, and symbol</Text>}
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Confirm Password *</Text>
               <Controller control={control} name="confirmPassword"
                 rules={{ required: true, validate: (v: any) => v === watch('password') }}
                 render={({ field }: any) => (
-                  <TextInput style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]} placeholder="Confirm your password" placeholderTextColor={semanticColors.textMuted} value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} secureTextEntry />
+                  <AppInput label="Confirm Password *" placeholder="Confirm your password" value={field.value} onChangeText={field.onChange} onBlur={field.onBlur} secureTextEntry />
                 )}
               />
               {watch('password') !== watch('confirmPassword') && watch('confirmPassword')?.length > 0 && <Text style={styles.err}>Passwords do not match</Text>}
             </View>
 
-            <TouchableOpacity style={[styles.signUpButton, (!isValid || isSubmitting) && { opacity: 0.6 }]} onPress={handleSubmit(onSubmit)} accessibilityRole="button" disabled={!isValid || isSubmitting}>
-              <Text style={styles.signUpButtonText}>{loading ? 'Creating...' : 'Sign Up'}</Text>
-            </TouchableOpacity>
+            <AppButton
+              title={loading ? 'Creating...' : 'Sign Up'}
+              onPress={handleSubmit(onSubmit)}
+              disabled={!isValid || isSubmitting}
+              loading={loading}
+              variant="primary"
+            />
 
             {error && (
               <Text style={{ color: '#E74C3C', textAlign: 'center', marginTop: 10 }}>{error}</Text>
@@ -134,7 +114,7 @@ const Signup = () => {
                 <Text style={styles.loginLink}>Login</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </SectionCard>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -148,23 +128,11 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 24 },
   title: { fontSize: 28, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
   subtitle: { fontSize: 16, textAlign: 'center' },
-  card: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-  },
+  card: { paddingHorizontal: 0 },
   inputContainer: { marginBottom: 20 },
-  label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  label: { ...typography.label, fontWeight: '600', marginBottom: spacing.xs },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16 },
     err: { color: '#E74C3C', marginTop: 6, fontSize: 12 },
-  signUpButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 6 },
-  signUpButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
   loginContainer: { paddingTop: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
   loginText: { fontSize: 16 },
   loginLink: { color: colors.primary, fontWeight: '700' },

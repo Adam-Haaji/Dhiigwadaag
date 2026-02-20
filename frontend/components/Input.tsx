@@ -64,10 +64,11 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: semanticColors.interactivePrimary,
-    shadowColor: semanticColors.interactivePrimary,
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: semanticColors.cardShadow,
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   inputError: {
     borderColor: semanticColors.interactiveDanger,

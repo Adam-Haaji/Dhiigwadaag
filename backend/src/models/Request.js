@@ -16,7 +16,7 @@ const requestSchema = new mongoose.Schema({
   units: { type: Number, min: 1, default: 1 },
 
   // Required status per spec
-  status: { type: String, enum: ['Pending', 'Contacted', 'Matched', 'Accepted', 'Fulfilled', 'Cancelled'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Contacted', 'Matched', 'Accepted', 'Fulfilled', 'Cancelled', 'Expired'], default: 'Pending' },
 
   // New: requester embedded object
   requester: {
@@ -42,6 +42,9 @@ const requestSchema = new mongoose.Schema({
 
   // Optional timestamp when the request is cancelled
   cancelledAt: { type: Date },
+
+  // Time-based expiry: automatically set on creation based on urgency
+  expiresAt: { type: Date },
 
   // Legacy/compatibility fields retained
   requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

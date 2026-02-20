@@ -32,10 +32,9 @@ export const signup = async (req, res) => {
     const existing = await User.findOne({ email: normEmail });
     if (existing) return res.status(400).json({ error: 'Email already exists' });
     const hashed = await bcrypt.hash(password, 10);
-    // Accept optional fields on signup so profile shows phone and blood type immediately
-    let finalRole = 'none';
-    const r = String(role || '').toLowerCase();
-    if (['donor','requester','both','admin'].includes(r)) finalRole = r;
+    // Accept optional fields on signup for convenience
+    // Enforce normalized signup: persist as normal user role only
+    let finalRole = 'user';
     const user = await User.create({
       name,
       email: normEmail,

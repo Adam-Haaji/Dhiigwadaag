@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import Donor from '../models/Donor.js';
 
 export const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -17,9 +18,22 @@ export const authMiddleware = (req, res, next) => {
 // Normalize role to lower-case for comparisons
 const roleOf = (req) => String(req?.user?.role || '').toLowerCase();
 
-export const requireDonor = (req, res, next) => {
+export const requireDonor = async (req, res, next) => {
   const r = roleOf(req);
+  // Check role first (legacy support)
   if (r === 'donor' || r === 'both' || r === 'admin') return next();
+  
+  // With role separation, check if user has a donor record
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (userId) {
+      const donor = await Donor.findOne({ user: userId }).select('_id').lean();
+      if (donor) return next();
+    }
+  } catch (err) {
+    // If check fails, fall through to error
+  }
+  
   return res.status(403).json({ error: 'forbidden_donor_only' });
 };
 

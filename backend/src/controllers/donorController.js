@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import Donor from '../models/Donor.js';
+import Donation from '../models/Donation.js';
 import DonorEligibilityLog from '../models/DonorEligibilityLog.js';
 import { yearsBetween } from '../utils/dateUtils.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
@@ -11,6 +12,129 @@ function computeMenus(role) {
   if (r === 'donor') return ['home', 'donor', 'notification', 'profile'];
   if (r === 'requester') return ['home', 'request', 'notification', 'profile'];
   return ['home'];
+}
+
+// Map app donor fields to ML API payload (exact keys required by eligibility-api)
+// Use sensible defaults so the model never receives null/zero for required numerics
+function mapDonorToEligibilityPayload(donor, hb, totalDonations) {
+  const genderStr = String(donor.gender || '').trim().toLowerCase();
+  const gender = genderStr === 'female' ? 'Female' : 'Male';
+  const age = Number(donor.age);
+  const weightKg = Number(donor.weightKg);
+  const hbNum = Number(hb);
+  const payload = {
+    Gender: gender,
+    Age: (age >= 18 && age <= 65) ? age : 28,
+    Blood_Group: String(donor.bloodGroup || '').trim().toUpperCase() || 'O+',
+    Total_Donations: Math.max(0, parseInt(totalDonations, 10) || 0),
+    Medical_Condition: String(donor.medicalCondition || 'None').trim(),
+    Weight_kg: (weightKg >= 50 && weightKg <= 200) ? weightKg : 72,
+    Hemoglobin_g_dL: (hbNum >= 12 && hbNum <= 20) ? hbNum : 14.5,
+  };
+  return payload;
+}
+
+// Helper function to check donor eligibility using ML model
+async function checkDonorEligibility(donorData, totalDonations = 0) {
+  const apiUrl = (process.env.ELIGIBILITY_API_URL || 'https://eligibility-api-zec1.onrender.com').replace(/\/$/, '');
+  const endpoint = `${apiUrl}/predict`;
+
+  try {
+    if (!apiUrl) {
+      console.error('[checkDonorEligibility] ELIGIBILITY_API_URL not set');
+      return {
+        eligible: null,
+        reason: 'Eligibility check unavailable. Please try again.',
+        confidencePercent: null,
+      };
+    }
+
+    // If medicalCondition !== "None" → immediate NOT eligible (no API call)
+    if (donorData.medicalCondition && String(donorData.medicalCondition).trim() !== 'None') {
+      return {
+        eligible: false,
+        reason: 'Medical condition not suitable for donation',
+        confidencePercent: 100,
+      };
+    }
+
+    const payload = mapDonorToEligibilityPayload(donorData, donorData.hb, totalDonations);
+
+    // Render free tier cold start can take 30–60s; use 60s timeout and longer retry delay
+    const timeoutMs = 60000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      const msg = (fetchErr?.message || '').toLowerCase();
+      const isRetryable = msg.includes('aborted') || msg.includes('timeout') || msg.includes('fetch') || msg.includes('econnrefused') || msg.includes('enotfound');
+      if (isRetryable) {
+        await new Promise(r => setTimeout(r, 8000));
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), timeoutMs);
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: retryController.signal,
+          });
+        } finally {
+          clearTimeout(retryTimeout);
+        }
+      } else {
+        throw fetchErr;
+      }
+    }
+    clearTimeout(timeoutId);
+
+    const statusCode = response.status;
+    const responseText = await response.text().catch(() => '');
+
+    if (!response.ok) {
+      throw new Error(`ML model API returned status ${statusCode}: ${responseText}`);
+    }
+
+    let modelResponse;
+    try {
+      modelResponse = JSON.parse(responseText);
+    } catch (e) {
+      throw new Error('Invalid JSON response from eligibility API');
+    }
+
+    const eligible = modelResponse.eligible !== undefined ? Boolean(modelResponse.eligible) : false;
+    const confidencePercent = modelResponse.confidence_percent != null
+      ? Number(modelResponse.confidence_percent)
+      : (modelResponse.confidence != null ? Number(modelResponse.confidence) * 100 : null);
+    const reason = modelResponse.reason || modelResponse.message ||
+      (eligible ? 'Eligible to donate' : 'Not eligible to donate');
+
+    return {
+      eligible,
+      reason,
+      confidencePercent,
+      raw: modelResponse,
+    };
+  } catch (error) {
+    if (error?.message && !error.message.includes('aborted')) {
+      console.error('[checkDonorEligibility] API error:', error.message);
+    }
+    return {
+      eligible: null,
+      reason: 'Eligibility check unavailable. Please try again.',
+      confidencePercent: null,
+      error: error?.message || 'Service error',
+    };
+  }
 }
 
 // POST /api/donors
@@ -40,25 +164,24 @@ export const createDonor = async (req, res) => {
       consentGiven,
       emergencyContact,
       lastDonationDate,
+      medicalCondition,
       availabilityStatus,
       donations,
     } = req.body || {};
 
     // Basic runtime validation (Mongoose will re-validate)
     if (!fullName || !dateOfBirth || !gender || !phone || !email || !district || !bloodGroup ||
-        weightKg === undefined || consentGiven === undefined || !emergencyContact || !lastDonationDate || !availabilityStatus) {
+        weightKg === undefined || consentGiven === undefined || !emergencyContact || !availabilityStatus) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    // New donor registration: never set lastDonationDate/unavailableUntil; only set on Fulfilled
+    const lastDonationDateForCreate = null;
     // Derived age
     const age = yearsBetween(dateOfBirth);
     // Run eligibility (createDonor path: user already passed client validation; we enforce again server-side)
     const elig = evaluateEligibility({ age, weightKg, gender, hb: req.body?.hb, lastDonationDate: null });
     if (!elig.eligible) {
-      // Log + mark user ineligible (do not escalate donor role per spec)
-      user.donorStatus = 'ineligible';
-      user.ineligibilityReason = elig.reason;
-      if (String(user.role) === 'requester') user.role = 'both'; else user.role = 'none';
-      await user.save().catch(()=>{});
+      // Do not modify users collection; just log eligibility result and return
       await DonorEligibilityLog.create({
         user: user._id,
         decision: 'ineligible',
@@ -68,14 +191,28 @@ export const createDonor = async (req, res) => {
       return res.status(400).json({ success: false, reason: elig.reason, donor: null });
     }
     // Phone format and uniqueness across Users and Donors
+    // Allow the same user to use their own phone number from their user account
     if (!/^[0-9+\-()\s]{6,20}$/.test(String(phone))) return res.status(400).json({ error: 'Invalid phone format' });
     const [uPhone, dPhone] = await Promise.all([
       User.findOne({ phone }).select('_id').lean(),
       Donor.findOne({ phone }).select('_id').lean(),
     ]);
-    if (uPhone || dPhone) return res.status(409).json({ error: 'Phone already in use' });
+    // Check if phone is in use by a different user (not the current user registering as donor)
+    if (uPhone && String(uPhone._id) !== String(userId)) {
+      return res.status(409).json({ error: 'Phone already in use' });
+    }
+    // Check if phone is in use by a different donor (not linked to current user)
+    if (dPhone) {
+      const donorWithPhone = await Donor.findById(dPhone._id).select('user').lean();
+      if (donorWithPhone && String(donorWithPhone.user) !== String(userId)) {
+        return res.status(409).json({ error: 'Phone already in use' });
+      }
+    }
 
-    const donor = await Donor.create({
+    // CRITICAL: Always set availabilityStatus to 'available' for new donor registrations
+// Donors only become 'unavailable' after fulfilling a donation (90-day cooldown)
+// This applies to both new donors and requester-to-donor conversions
+const donor = await Donor.create({
       user: userId,
       fullName,
       dateOfBirth,
@@ -87,25 +224,53 @@ export const createDonor = async (req, res) => {
       weightKg,
       consentGiven,
       emergencyContact,
-      lastDonationDate,
-      availabilityStatus,
+      lastDonationDate: lastDonationDateForCreate,
+      medicalCondition: medicalCondition || 'None', // Default to 'None' if not provided
+      availabilityStatus: 'available', // Always 'available' on registration; only Fulfilled sets unavailable
+      nextAvailableDate: null,
       donations: Array.isArray(donations) ? donations : [],
     });
 
-    // Upgrade linked user role to 'Donor' so future logins are recognized as donor
+    // Run ML eligibility check in background (do not block registration)
+    const donorId = donor._id;
+    const donorDoc = donor;
+    const userIdForDonations = userId;
+    const hbVal = req.body?.hb != null && req.body?.hb !== '' ? Number(req.body.hb) : undefined;
+    setImmediate(async () => {
+      try {
+        const donorWithAge = await Donor.findById(donorId).lean();
+        const finalAge = donorWithAge?.age || donorDoc.age;
+        const donorPayload = {
+          ...donorDoc,
+          age: finalAge,
+          hb: hbVal,
+        };
+        const totalDonations = await Donation.countDocuments({ donorId: userIdForDonations });
+        const eligibilityResult = await checkDonorEligibility(donorPayload, totalDonations);
+        const newStatus = eligibilityResult.eligible === true ? 'ELIGIBLE'
+          : eligibilityResult.eligible === false ? 'NOT_ELIGIBLE'
+          : 'UNKNOWN';
+        const updatePayload = {
+          eligibilityStatus: newStatus,
+          eligibilityReason: newStatus === 'UNKNOWN' ? 'Eligibility check unavailable. Please try again.' : (eligibilityResult.reason || null),
+          eligibilityConfidencePercent: eligibilityResult.confidencePercent ?? null,
+          eligibilityConfidence: eligibilityResult.confidencePercent != null ? eligibilityResult.confidencePercent / 100 : null,
+          eligibilityCheckedAt: new Date(),
+          eligibilityRaw: eligibilityResult.raw || null,
+        };
+        await Donor.findByIdAndUpdate(donorId, updatePayload);
+      } catch (e) {
+        console.error('[createDonor] eligibility background error:', e?.message || e);
+        await Donor.findByIdAndUpdate(donorId, {
+          eligibilityStatus: 'UNKNOWN',
+          eligibilityReason: 'Eligibility check unavailable. Please try again.',
+          eligibilityCheckedAt: new Date(),
+        }).catch(() => {});
+      }
+    });
+
+    // Do not modify users collection; record eligibility log only
     try {
-      const current = String(user.role || '').toLowerCase();
-      let nextRole = 'donor';
-      if (current === 'requester' || current === 'both') nextRole = 'both';
-      user.role = nextRole;
-      user.donorStatus = 'available';
-      user.lastDonationDate = null;
-      user.ineligibilityReason = null;
-      user.age = age;
-      user.weightKg = weightKg;
-      user.gender = gender;
-      if (req.body?.hb !== undefined) user.hb = req.body.hb;
-      await user.save();
       await DonorEligibilityLog.create({
         user: user._id,
         donor: donor?._id,
@@ -114,7 +279,7 @@ export const createDonor = async (req, res) => {
         checkResults: { age, weightKg, gender, hb: req.body?.hb, cooldown: { withinCooldown: false } },
       }).catch(()=>{});
     } catch (e) {
-      console.error('Failed to update user role to donor/both:', e?.message || e);
+      console.error('Eligibility log insert failed:', e?.message || e);
     }
 
     const summary = {
@@ -134,7 +299,11 @@ export const createDonor = async (req, res) => {
       }
     } catch (_) {}
 
-    return res.status(201).json({ donor, user: summary });
+    // Return immediately; eligibility is written in background (dashboard reads from DB)
+    return res.status(201).json({
+      donor,
+      user: summary
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -146,7 +315,7 @@ export const registerDonor = async (req, res) => {
   try {
     const userId = req?.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('_id name email phone lastDonationDate');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     const { age, weightKg, gender, hb, bloodType, location, phone, email } = req.body || {};
@@ -171,16 +340,6 @@ export const registerDonor = async (req, res) => {
     }
 
     if (!elig.eligible) {
-      user.donorStatus = 'ineligible';
-      user.ineligibilityReason = elig.reason;
-      // Role transition per spec
-      user.role = (user.role === 'requester') ? 'both' : 'none';
-      user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
-      if (bloodType) user.bloodType = String(bloodType).toUpperCase();
-      if (location) user.location = location;
-      if (newPhone) user.phone = newPhone;
-      if (newEmail) user.email = newEmail;
-      await user.save();
       await DonorEligibilityLog.create({
         user: user._id,
         decision: 'ineligible',
@@ -197,15 +356,7 @@ export const registerDonor = async (req, res) => {
     }
 
     // Eligible path
-    user.donorStatus = 'available';
-    user.ineligibilityReason = null;
-    user.role = (user.role === 'requester') ? 'both' : 'donor';
-    user.age = ageNum; user.weightKg = weightNum; user.gender = gender.toLowerCase(); user.hb = hbNum;
-    if (bloodType) user.bloodType = String(bloodType).toUpperCase();
-    if (location) user.location = location;
-    if (newPhone) user.phone = newPhone;
-    if (newEmail) user.email = newEmail;
-    await user.save();
+    // Do not modify users collection on eligibility success
     await DonorEligibilityLog.create({
       user: user._id,
       decision: 'eligible',
@@ -218,17 +369,7 @@ export const registerDonor = async (req, res) => {
         cooldown: { lastDonationDate, nextEligibleDate: null, withinCooldown: false },
       },
     }).catch(()=>{});
-    const summary = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      donorStatus: user.donorStatus,
-      unavailableUntil: user.unavailableUntil,
-      ineligibilityReason: user.ineligibilityReason,
-      menus: computeMenus(user.role),
-    };
-    return res.json({ success: true, message: 'You are eligible to donate', user: summary });
+    return res.json({ success: true, message: 'You are eligible to donate' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -448,6 +589,80 @@ export const getDonorById = async (req, res) => {
 
     return res.status(404).json({ error: 'Donor not found' });
   } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+// GET /api/donors/me - Get current user's donor profile
+export const getMyDonor = async (req, res) => {
+  try {
+    const userId = req?.user?.id || req?.user?._id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const donor = await Donor.findOne({ user: userId }).lean();
+    if (!donor) {
+      return res.json({ exists: false, donor: null });
+    }
+    
+    return res.json({ 
+      exists: true, 
+      donor: {
+        _id: donor._id,
+        fullName: donor.fullName,
+        email: donor.email,
+        phone: donor.phone,
+        bloodGroup: donor.bloodGroup,
+        district: donor.district,
+        availabilityStatus: donor.availabilityStatus,
+        lastDonationDate: donor.lastDonationDate,
+        nextAvailableDate: donor.nextAvailableDate,
+        medicalCondition: donor.medicalCondition,
+        eligibilityStatus: donor.eligibilityStatus,
+        eligibilityReason: donor.eligibilityReason,
+        eligibilityConfidence: donor.eligibilityConfidence,
+        eligibilityConfidencePercent: donor.eligibilityConfidencePercent,
+        eligibilityCheckedAt: donor.eligibilityCheckedAt,
+      }
+    });
+  } catch (err) {
+    console.error('[getMyDonor] Error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+// POST /api/donors/me/recheck-eligibility - Re-run ML eligibility for existing donor (optional hb in body)
+export const recheckEligibility = async (req, res) => {
+  try {
+    const userId = req?.user?.id || req?.user?._id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const donor = await Donor.findOne({ user: userId }).lean();
+    if (!donor) return res.status(404).json({ error: 'Donor not found' });
+    const hb = req.body?.hb != null ? Number(req.body.hb) : null;
+    const totalDonations = await Donation.countDocuments({ donorId: donor.user });
+    const donorPayload = { ...donor, hb };
+    const eligibilityResult = await checkDonorEligibility(donorPayload, totalDonations);
+    const newStatus = eligibilityResult.eligible === true ? 'ELIGIBLE'
+      : eligibilityResult.eligible === false ? 'NOT_ELIGIBLE' : 'UNKNOWN';
+    const updatePayload = {
+      eligibilityStatus: newStatus,
+      eligibilityReason: newStatus === 'UNKNOWN' ? 'Eligibility check unavailable. Please try again.' : (eligibilityResult.reason || null),
+      eligibilityConfidencePercent: eligibilityResult.confidencePercent ?? null,
+      eligibilityConfidence: eligibilityResult.confidencePercent != null ? eligibilityResult.confidencePercent / 100 : null,
+      eligibilityCheckedAt: new Date(),
+      eligibilityRaw: eligibilityResult.raw || null,
+    };
+    await Donor.findByIdAndUpdate(donor._id, updatePayload);
+    const updated = await Donor.findById(donor._id).lean();
+    return res.json({
+      eligibilityStatus: updated.eligibilityStatus,
+      eligibilityReason: updated.eligibilityReason,
+      eligibilityConfidence: updated.eligibilityConfidence,
+      eligibilityConfidencePercent: updated.eligibilityConfidencePercent,
+      eligibilityCheckedAt: updated.eligibilityCheckedAt,
+      donor: updated,
+    });
+  } catch (err) {
+    console.error('[recheckEligibility] Error:', err?.message || err);
     return res.status(500).json({ error: err.message });
   }
 };

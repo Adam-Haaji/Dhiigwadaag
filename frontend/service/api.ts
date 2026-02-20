@@ -195,7 +195,7 @@ export const api = {
   clearToken,
   get: (path: string) => request('GET', path),
   // auth
-  signup: (data: { name: string; email: string; password: string; bloodType: string; role: 'Donor'|'Requester'; location: string; phone: string; }) => request('POST', '/api/auth/signup', data),
+  signup: (data: { name: string; email: string; password: string; role: 'Donor'|'Requester'; location: string; phone: string; }) => request('POST', '/api/auth/signup', data),
   login: async (data: { email: string; password: string; }) => {
     const result = await request('POST', '/api/auth/login', data);
     if (result?.token) await setToken(result.token);
@@ -205,7 +205,10 @@ export const api = {
   me: () => request('GET', '/api/users/me'),
   updateMe: (data: Json) => request('PUT', '/api/users/me', data),
   changePassword: (data: { oldPassword: string; newPassword: string }) => request('POST', '/api/users/change-password', data),
-  switchRole: async (newRole: 'donor'|'requester'|'both') => request('POST', '/api/users/switch-role', { newRole }),
+  selectRole: async (newRole: 'donor'|'requester') => request('POST', '/api/users/select-role', { newRole }),
+  // requester onboarding (separate record without changing user.role)
+  requesterRegister: () => request('POST', '/api/requesters/register'),
+  requesterMe: () => request('GET', '/api/requesters/me'),
   health: () => request('GET', '/api/health'),
   // donors
   // Legacy (User-profile-based) register; kept for backward compatibility in case older screens use it.
@@ -288,6 +291,7 @@ export const api = {
   },
   donorsMeta: () => request('GET', '/api/donors/meta'),
   getDonorProfile: (id: string) => request('GET', `/api/donors/${encodeURIComponent(id)}`),
+  donorMe: () => request('GET', '/api/donors/me'), // get current user's donor profile
   // requests
   createRequest: (data: { patientName: string; bloodType: string; location: string; units: number; urgency: 'Normal'|'Critical'; hospitalName?: string; contactPhone?: string; notes?: string; }) => request('POST', '/api/requests', data),
   listRequests: () => request('GET', '/api/requests'),
@@ -344,6 +348,17 @@ export const api = {
   },
   // donations (history)
   getMyDonations: () => request('GET', '/api/donations/mine'),
+  // chatbot (requester assistant)
+  chatbotChat: (data: { message: string; history?: { role: string; content: string }[] }) =>
+    request('POST', '/api/chatbot/chat', data),
+  getAvailableDonors: (params: { bloodType: string; district: string; urgency?: string }) => {
+    const qs = new URLSearchParams({
+      bloodType: params.bloodType,
+      district: params.district,
+      ...(params.urgency ? { urgency: params.urgency } : {}),
+    }).toString();
+    return request('GET', `/api/chatbot/available-donors?${qs}`);
+  },
 };
 
 export type Donor = { _id: string; name: string; email: string; bloodType: string; location: string; phone: string; availability: boolean; avatarUrl?: string };

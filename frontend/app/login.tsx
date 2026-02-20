@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import colors, { semanticColors } from "../constants/colors";
+import colors, { semanticColors, spacing, typography } from "../constants/colors";
+import AppInput from '@/components/AppInput';
+import AppButton from '@/components/AppButton';
+import SectionCard from '@/components/SectionCard';
 import apiClient from "../service/api";
 import useAuthHook from "../hooks/useAuth";
 import { useTheme } from '@/context/ThemeContext';
@@ -22,10 +25,34 @@ const Login = () => {
       const res = await apiClient.login({ email, password });
       await setUser({ token: res.token, user: res.user });
       const role = String(res?.user?.role || '').toLowerCase();
-      if (role === 'none') router.replace('/role');
-      else if (role === 'donor') router.replace('/(home)/donor');
-      else if (role === 'requester') router.replace('/(home)/request');
-      else router.replace('/(home)');
+      
+      // Check if user has requester record (regardless of role)
+      try {
+        const meReq = await apiClient.requesterMe();
+        if (meReq?.exists) {
+          router.replace('/(home)/request');
+          return;
+        }
+      } catch {}
+      
+      // Check if user has donor record (using correct API)
+      try {
+        const donorData = await apiClient.donorMe();
+        if (donorData?.exists) {
+          router.replace('/(home)/donor');
+          return;
+        }
+      } catch {}
+      
+      // If normal user (no donor/requester records), show role selection page
+      if (role === 'user' || role === 'none') {
+        router.replace('/role');
+      } else if (role === 'admin') {
+        router.replace('/(home)');
+      } else {
+        // Default: show role selection for any other case
+        router.replace('/role');
+      }
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {
@@ -50,17 +77,15 @@ const Login = () => {
           </View>
 
           {/* Card with form */}
-          <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }]}>
+          <SectionCard>
             {/* Email/Phone Input */}
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Email</Text>
               <Controller control={control} name="email"
                 rules={{ required: true, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }}
                 render={({ field }: any) => (
-                  <TextInput
-                    style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]}
+                  <AppInput
+                    label="Email"
                     placeholder="Email"
-                    placeholderTextColor={semanticColors.textMuted}
                     value={field.value}
                     onChangeText={field.onChange}
                     autoCapitalize="none"
@@ -73,14 +98,12 @@ const Login = () => {
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: semanticColors.textPrimary }]}>Password</Text>
               <Controller control={control} name="password"
                 rules={{ required: true, minLength: 6 }}
                 render={({ field }: any) => (
-                  <TextInput
-                    style={[styles.input, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle, color: semanticColors.textPrimary }]}
+                  <AppInput
+                    label="Password"
                     placeholder="Password"
-                    placeholderTextColor={semanticColors.textMuted}
                     value={field.value}
                     onChangeText={field.onChange}
                     secureTextEntry
@@ -100,9 +123,13 @@ const Login = () => {
             </TouchableOpacity>
 
             {/* Login Button */}
-              <TouchableOpacity  style={[styles.loginButton, ((loading || !isValid || isSubmitting) && { opacity: 0.7 })]} onPress={handleSubmit(onSubmit)} accessibilityRole="button" disabled={loading || !isValid || isSubmitting}>
-                <Text style={styles.loginButtonText}>{loading ? 'Logging in...' : 'Login'}</Text>
-              </TouchableOpacity>
+              <AppButton
+                title={loading ? 'Logging in...' : 'Login'}
+                onPress={handleSubmit(onSubmit)}
+                disabled={loading || !isValid || isSubmitting}
+                loading={loading}
+                variant="primary"
+              />
 
               {error && (
                 <Text style={styles.errorText}>{error}</Text>
@@ -115,7 +142,7 @@ const Login = () => {
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </SectionCard>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -152,52 +179,17 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    borderRadius: 20,
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    // Android shadow
-    elevation: 8,
-    borderWidth: 1,
   },
   inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
+    marginBottom: spacing.md,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 20,
+    marginBottom: spacing.md,
   },
   forgotPasswordText: {
-    fontSize: 14,
+    ...typography.caption,
     color: colors.primary,
-    fontWeight: '600',
-  },
-  loginButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  loginButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
     fontWeight: '600',
   },
   signupContainer: {
@@ -208,7 +200,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   signupText: {
-    fontSize: 16,
+    ...typography.bodySmall,
   },
   signupLink: {
     color: colors.primary,

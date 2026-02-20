@@ -22,11 +22,19 @@ const palette = {
   gray700: '#4B5563',
   gray800: '#323943',
   gray900: '#1F242C',
-  // Functional / Status
-  success: '#16A34A',
-  warning: '#F59E0B',
-  danger: '#DC2626',
-  info: '#2563EB',
+  // Functional / Status (Medical-grade, softened)
+  success: '#10B981', // Soft green - medical safe
+  successLight: '#D1FAE5', // Light green background
+  successDark: '#059669', // Darker green for text
+  warning: '#F59E0B', // Amber - medical safe
+  warningLight: '#FEF3C7', // Light amber background
+  warningDark: '#D97706', // Darker amber
+  danger: '#EF4444', // Soft red - not aggressive
+  dangerLight: '#FEE2E2', // Light red background
+  dangerDark: '#DC2626', // Darker red
+  info: '#3B82F6', // Calm blue
+  infoLight: '#DBEAFE', // Light blue background
+  infoDark: '#2563EB', // Darker blue
 };
 
 // Export legacy default for existing imports expecting { primary, background, text }
@@ -124,8 +132,18 @@ export const spacing = {
   sm: 12,
   md: 16,
   lg: 20,
-  xl: 28,
-  xxl: 36,
+  xl: 24,
+  xxl: 32,
+  xxxl: 40,
+  // Consistent 8px grid system
+  grid: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 40,
+  },
 };
 
 export const elevation = {
@@ -135,34 +153,45 @@ export const elevation = {
   },
   sm: {
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
   lg: {
     shadowColor: '#000',
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  xl: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
     elevation: 8,
   },
 };
 
 export const typography = {
-  h1: { fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  h2: { fontSize: 22, lineHeight: 28, fontWeight: '600' },
-  h3: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '500', letterSpacing: 0.3 },
-  caption: { fontSize: 11, lineHeight: 14, fontWeight: '400' },
+  h1: { fontSize: 32, lineHeight: 40, fontWeight: '700', letterSpacing: -0.5 },
+  h2: { fontSize: 24, lineHeight: 32, fontWeight: '600', letterSpacing: -0.3 },
+  h3: { fontSize: 20, lineHeight: 28, fontWeight: '600', letterSpacing: -0.2 },
+  h4: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
+  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
+  bodySmall: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  label: { fontSize: 14, lineHeight: 20, fontWeight: '500', letterSpacing: 0.2 },
+  labelSmall: { fontSize: 12, lineHeight: 16, fontWeight: '500', letterSpacing: 0.3 },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  overline: { fontSize: 11, lineHeight: 14, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
 };
 
 export type TypographyKey = keyof typeof typography;

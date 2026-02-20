@@ -1,19 +1,24 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
-import colorsBase, { semanticColors } from '@/constants/colors';
+import colorsBase, { semanticColors, spacing, typography, elevation } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
+import HeaderBanner from '@/components/HeaderBanner';
+import { setHomeModePreference } from '@/service/homeMode';
 
 export default function DonorDashboard() {
   const { user, setUser } = useAuth();
   const { isDark } = useTheme();
   const [switching, setSwitching] = useState(false);
+  const [hasDonorRecord, setHasDonorRecord] = useState(false);
+  const [donorProfile, setDonorProfile] = useState<{ bloodGroup?: string; phone?: string; email?: string; district?: string; availabilityStatus?: string; lastDonationDate?: string; nextAvailableDate?: string; medicalCondition?: string; eligibilityStatus?: string; eligibilityReason?: string; eligibilityConfidence?: number; eligibilityConfidencePercent?: number; eligibilityCheckedAt?: string } | null>(null);
   const role = String(user?.user?.role || '').toLowerCase();
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
   const unavailableUntil = user?.user?.unavailableUntil ? new Date(user.user.unavailableUntil) : null;
@@ -23,16 +28,57 @@ export default function DonorDashboard() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!(role === 'donor' || role === 'both' || role === 'admin')) {
-      router.replace('/role');
+  // Function to refresh donor profile
+  const refreshDonorProfile = useCallback(async () => {
+    try {
+      const donorData = await api.donorMe();
+      if (donorData?.exists && donorData?.donor) {
+        setHasDonorRecord(true);
+        setDonorProfile(donorData.donor);
+      } else {
+        // Check donorStatus or role (legacy support)
+        const isDonor = 
+          (donorStatus !== 'not_a_donor' && donorStatus !== '') || 
+          role === 'donor' || 
+          role === 'both' || 
+          role === 'admin';
+        setHasDonorRecord(isDonor);
+        // Only redirect if definitely not a donor (allow access during registration flow)
+        if (!isDonor && role !== 'none') {
+          // Small delay to allow registration to complete
+          setTimeout(() => {
+            router.replace('/donorRegistration');
+          }, 100);
+        }
+      }
+    } catch (e) {
+      // Fallback to role check
+      const isDonor = 
+        (donorStatus !== 'not_a_donor' && donorStatus !== '') || 
+        role === 'donor' || 
+        role === 'both' || 
+        role === 'admin';
+      setHasDonorRecord(isDonor);
+      if (!isDonor && role !== 'none') {
+        setTimeout(() => {
+          router.replace('/donorRegistration');
+        }, 100);
+      }
     }
-  }, [role]);
+  }, [role, donorStatus]);
+
+  // Check if user has donor record and load profile (for role separation)
+  // Only refresh on focus to avoid duplicate calls
+  useFocusEffect(
+    useCallback(() => {
+      refreshDonorProfile();
+    }, [refreshDonorProfile])
+  );
 
   useEffect(() => {
     let cancelled = false;
     async function loadHistory() {
-      if (!(role === 'donor' || role === 'both' || role === 'admin')) return;
+      if (!hasDonorRecord && !(role === 'donor' || role === 'both' || role === 'admin')) return;
       setLoadingHistory(true);
       setHistoryError(null);
       try {
@@ -50,20 +96,30 @@ export default function DonorDashboard() {
     }
     loadHistory();
     return () => { cancelled = true; };
-  }, [role]);
+  }, [role, hasDonorRecord]);
 
+  // My Status: Unavailable ONLY if (1) in donation cooldown OR (2) NOT_ELIGIBLE; else Available
   const statusBadge = useMemo(() => {
-    if (donorStatus === 'unavailable' && unavailableUntil) {
-      const now = Date.now();
-      const ms = unavailableUntil.getTime() - now;
-      const days = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-      return `Unavailable until ${unavailableUntil.toLocaleDateString()} (${days} day${days !== 1 ? 's' : ''} remaining)`;
-    }
-    if (donorStatus === 'available') return 'Available';
-    return 'Not a donor';
-  }, [donorStatus, unavailableUntil]);
+    if (!hasDonorRecord) return 'Not a donor';
+    const now = new Date();
+    const nextAvail = donorProfile?.nextAvailableDate ? new Date(donorProfile.nextAvailableDate) : null;
+    const userUnavail = unavailableUntil ? new Date(unavailableUntil) : null;
+    const isInCooldown = (nextAvail && nextAvail.getTime() > now.getTime()) || (userUnavail && userUnavail.getTime() > now.getTime());
+    const elig = donorProfile?.eligibilityStatus;
+    const isNotEligible = elig === 'NOT_ELIGIBLE' || elig === 'not_eligible';
+    return (isInCooldown || isNotEligible) ? 'Unavailable' : 'Available';
+  }, [hasDonorRecord, donorProfile?.nextAvailableDate, donorProfile?.eligibilityStatus, unavailableUntil]);
 
-  const handleRegister = () => router.push('/donorRegistration');
+  // Last donation: prefer donor profile (from API), then most recent from donation history, then user
+  const lastDonationDisplay = useMemo(() => {
+    const fromProfile = donorProfile?.lastDonationDate;
+    if (fromProfile) return new Date(fromProfile).toLocaleDateString();
+    const fromHistory = history?.[0]?.donationDate;
+    if (fromHistory) return new Date(fromHistory).toLocaleDateString();
+    if (lastDonationDate) return lastDonationDate.toLocaleDateString();
+    return null;
+  }, [donorProfile?.lastDonationDate, history, lastDonationDate]);
+
   const handleViewMatches = async () => {
     try {
       const matches: any[] = await api.listMyMatches();
@@ -79,48 +135,45 @@ export default function DonorDashboard() {
     if (switching) return;
     setSwitching(true);
     try {
-      const updated = await api.switchRole('requester');
-      const token = user?.token;
-      await setUser({ token, user: updated });
+      await setHomeModePreference('requester');
+      // Check if requester record already exists
+      let requesterData;
+      try {
+        requesterData = await api.requesterMe();
+      } catch {}
+      
+      // If no requester record exists, create one
+      // This creates a requester record WITHOUT changing user.role
+      // User remains a donor AND becomes a requester (dual-role)
+      if (!requesterData?.exists) {
+        requesterData = await api.requesterRegister();
+      }
+      
+      // Update user profile if returned (works for both existing and newly created records)
+      if (requesterData?.user) {
+        const token = user?.token;
+        await setUser({ 
+          token, 
+          user: { 
+            ...user?.user, 
+            email: requesterData.user.email,
+            phone: requesterData.user.phone,
+            name: requesterData.user.name,
+          } 
+        });
+      }
+      
+      // Navigate to requester dashboard
+      // Both Donor and Requester tabs will be visible (dual-role user)
       router.replace('/(home)/request');
-    } catch {}
-    setSwitching(false);
+    } catch (e) {
+      // If error, still try to navigate (user might already be a requester)
+      router.replace('/(home)/request');
+    } finally {
+      setSwitching(false);
+    }
   };
 
-  const features = [
-    {
-      title: "Health Check",
-      description: "Complete health screening before donation",
-      icon: "heart.text.square.fill",
-      color: colorsBase.palette.success,
-    },
-    {
-      title: "Safe Process",
-      description: "Sterile equipment and professional staff",
-      icon: "shield.checkered",
-      color: colorsBase.palette.info,
-    },
-    {
-      title: "Quick & Easy",
-      description: "Donation process takes only 10-15 minutes",
-      icon: "clock.fill",
-      color: colorsBase.palette.warning,
-    },
-    {
-      title: "Track Impact",
-      description: "See how your donations help save lives",
-      icon: "chart.line.uptrend.xyaxis",
-      color: semanticColors.interactivePrimary,
-    },
-  ];
-
-  const requirements = [
-    "Age: 18-65 years old",
-    "Weight: Minimum 50kg (110 lbs)",
-    "Good general health",
-    "No recent illness or medication",
-    "Valid ID required",
-  ];
 
   const styles = useMemo(() => makeStyles(), [isDark]);
 
@@ -145,40 +198,41 @@ export default function DonorDashboard() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section - match Notification header border style */}
-        <View style={styles.headerGradient}>
+        {/* Header Section - unified banner */}
+        <HeaderBanner style={styles.headerBannerWrap}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
                 <IconSymbol name="drop.fill" size={18} color={semanticColors.textInverse} />
               </View>
               <View>
-                <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Become a Donor</Text>
-                <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Join thousands of heroes</Text>
+                <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Donor Dashboard</Text>
+                <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Your donation status</Text>
               </View>
             </View>
           </View>
-        </View>
+        </HeaderBanner>
 
-        {donorStatus === 'not_a_donor' && (
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-            <IconSymbol name="person.badge.plus" size={24} color={semanticColors.textInverse} />
-            <Text style={[styles.registerButtonText, { color: semanticColors.textInverse }]}>Register as Donor</Text>
+        {/* Secondary actions: subtle side-by-side cards */}
+        <View style={styles.actionsRow}>
+          {hasDonorRecord && (
+            <TouchableOpacity style={styles.actionCard} onPress={handleSwitchToRequester} disabled={switching}>
+              <IconSymbol name="arrow.right.arrow.left.circle.fill" size={18} color={semanticColors.textPrimary} />
+              <Text style={styles.actionLabel}>{switching ? 'Switching...' : 'Switch to Requester'}</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.actionCard} onPress={handleViewMatches}>
+            <IconSymbol name="bell" size={18} color={semanticColors.textPrimary} />
+            <Text style={styles.actionLabel}>View Matched Requests</Text>
           </TouchableOpacity>
-        )}
-
-        {/* Switch Role */}
-        <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchToRequester} disabled={switching}>
-          <IconSymbol name="arrow.right.arrow.left.circle.fill" size={20} color={semanticColors.textInverse} />
-          <Text style={[styles.switchBtnText, { color: semanticColors.textInverse }]}>{switching ? 'Switching...' : 'Switch to Requester'}</Text>
-        </TouchableOpacity>
+        </View>
 
         {/* Status Card */}
         <View style={styles.statusCard}>
           <Text style={styles.statusTitle}>My Status</Text>
-          <Text style={[styles.statusValue, donorStatus === 'unavailable' && { color: semanticColors.interactiveDanger }]}>{statusBadge}</Text>
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>Last Donation:</Text><Text style={styles.statusText}>{lastDonationDate ? lastDonationDate.toLocaleDateString() : '—'}</Text></View>
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>Next Eligibility:</Text><Text style={styles.statusText}>{unavailableUntil ? unavailableUntil.toLocaleDateString() : '—'}</Text></View>
+          <Text style={[styles.statusValue, statusBadge === 'Unavailable' && { color: semanticColors.interactiveDanger }]}>{statusBadge}</Text>
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>Last Donation:</Text><Text style={styles.statusText}>{lastDonationDisplay ?? '—'}</Text></View>
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>Next Eligibility:</Text><Text style={styles.statusText}>{donorProfile?.nextAvailableDate ? new Date(donorProfile.nextAvailableDate).toLocaleDateString() : (unavailableUntil ? unavailableUntil.toLocaleDateString() : 'Eligible now')}</Text></View>
           {donorStatus === 'ineligible' && ineligibilityReason && (
             <View style={{ marginTop: 12 }}>
               <Text style={styles.ineligibleHeading}>Ineligible Reason</Text>
@@ -188,132 +242,149 @@ export default function DonorDashboard() {
           )}
         </View>
 
-        {/* Quick Access to Matched Requests */}
-        <TouchableOpacity style={styles.matchesButton} onPress={handleViewMatches}>
-          <IconSymbol name="bell" size={22} color={semanticColors.textInverse} />
-          <Text style={[styles.matchesButtonText, { color: semanticColors.textInverse }]}>View Matched Requests</Text>
-        </TouchableOpacity>
-
-        {/* Donation History */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation History</Text>
-          <View style={styles.requirementsCard}>
-            {loadingHistory && (
-              <View style={styles.requirementItem}>
-                <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
-                <Text style={styles.requirementText}>Loading history...</Text>
-              </View>
-            )}
-            {!loadingHistory && historyError && (
-              <View style={styles.requirementItem}>
-                <IconSymbol name="exclamationmark.triangle.fill" size={20} color={semanticColors.interactiveDanger} />
-                <Text style={styles.requirementText}>{historyError}</Text>
-              </View>
-            )}
-            {!loadingHistory && !historyError && history.length === 0 && (
-              <View style={styles.requirementItem}>
-                <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
-                <Text style={styles.requirementText}>No donation records yet.</Text>
-              </View>
-            )}
-            {!loadingHistory && !historyError && history.map((h, i) => {
-              const dt = new Date(h.donationDate).toLocaleDateString();
-              const vol = h.volumeMl ? `${h.volumeMl}ml` : '—';
-              const screening = h.screeningClear === true ? 'Cleared' : h.screeningClear === false ? 'Pending' : '';
+        {/* Eligibility Status Card */}
+        {hasDonorRecord && donorProfile && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusTitle}>Eligibility Status</Text>
+            
+            {/* Medical Condition - Always show with placeholder */}
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Medical Condition:</Text>
+              <Text 
+                style={[styles.statusText, { textAlign: 'right', flexShrink: 1, minWidth: 0 }]} 
+                numberOfLines={2} 
+                ellipsizeMode="tail"
+              >
+                {donorProfile.medicalCondition || '—'}
+              </Text>
+            </View>
+            
+            {/* Status: from DB only — ELIGIBLE/eligible, NOT_ELIGIBLE/not_eligible, UNKNOWN, pending */}
+            {(() => {
+              const s = donorProfile.eligibilityStatus;
+              const isEligible = s === 'ELIGIBLE' || s === 'eligible';
+              const isNotEligible = s === 'NOT_ELIGIBLE' || s === 'not_eligible';
+              const isUnknown = s === 'UNKNOWN';
+              const isPending = s === 'pending' || !s;
+              let statusText = 'Checking eligibility...';
+              if (isEligible) statusText = 'Eligible to Donate';
+              else if (isNotEligible) statusText = 'Not Eligible to Donate';
+              else if (isUnknown) statusText = 'Eligibility check unavailable. Please try again.';
               return (
-                <View key={i} style={styles.requirementItem}>
-                  <IconSymbol name="heart.fill" size={20} color={semanticColors.interactivePrimary} />
-                  <Text style={styles.requirementText}>{dt} · {vol}{screening ? ` · ${screening}` : ''}</Text>
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusLabel}>Status:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end', flexShrink: 1, minWidth: 0, maxWidth: '75%' }}>
+                    {isEligible && <IconSymbol name="checkmark.circle.fill" size={16} color="#16A34A" />}
+                    {isNotEligible && <IconSymbol name="xmark.circle.fill" size={16} color={semanticColors.interactiveDanger} />}
+                    {isUnknown && <IconSymbol name="exclamationmark.triangle.fill" size={16} color={semanticColors.textSecondary} />}
+                    {isPending && <IconSymbol name="clock.fill" size={16} color={semanticColors.textSecondary} />}
+                    <Text style={[styles.statusText, {
+                      color: isEligible ? '#16A34A' : isNotEligible ? semanticColors.interactiveDanger : semanticColors.textSecondary,
+                      marginLeft: 4, fontWeight: '600', textAlign: 'right', flexShrink: 1
+                    }]} numberOfLines={2} ellipsizeMode="tail">{statusText}</Text>
+                  </View>
                 </View>
               );
-            })}
+            })()}
+            
+            {/* Reason: show model reason when we have a stored result */}
+            {(donorProfile.eligibilityReason && (donorProfile.eligibilityStatus === 'ELIGIBLE' || donorProfile.eligibilityStatus === 'eligible' || donorProfile.eligibilityStatus === 'NOT_ELIGIBLE' || donorProfile.eligibilityStatus === 'not_eligible')) && (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Reason:</Text>
+                <Text style={[styles.statusText, { textAlign: 'right', flex: 1, flexShrink: 1, minWidth: 0 }]} numberOfLines={3} ellipsizeMode="tail">
+                  {donorProfile.eligibilityReason}
+                </Text>
+              </View>
+            )}
+            
+            {/* Message Banner - only for definite results or UNKNOWN */}
+            {(() => {
+              const s = donorProfile.eligibilityStatus;
+              const isEligible = s === 'ELIGIBLE' || s === 'eligible';
+              const isNotEligible = s === 'NOT_ELIGIBLE' || s === 'not_eligible';
+              const isUnknown = s === 'UNKNOWN';
+              const medicalCondition = donorProfile.medicalCondition || 'None';
+              const isNotNone = medicalCondition !== 'None' && medicalCondition.trim() !== '';
+              if (isNotNone && isNotEligible) {
+                return (
+                  <View style={{ marginTop: spacing.md, padding: spacing.md, backgroundColor: colorsBase.palette.dangerLight, borderRadius: 12, borderWidth: 1, borderColor: colorsBase.palette.danger + '40' }}>
+                    <Text style={{ ...typography.bodySmall, color: colorsBase.palette.dangerDark, lineHeight: 22, fontWeight: '500' }}>
+                      Medical condition reported. Donor is not eligible to donate at this time.
+                    </Text>
+                  </View>
+                );
+              }
+              if (isEligible) {
+                return (
+                  <View style={{ marginTop: spacing.md, padding: spacing.md, backgroundColor: colorsBase.palette.successLight, borderRadius: 12, borderWidth: 1, borderColor: colorsBase.palette.success + '40' }}>
+                    <Text style={{ ...typography.bodySmall, color: colorsBase.palette.successDark, lineHeight: 22, fontWeight: '500' }}>
+                      You are healthy and eligible to donate blood.
+                    </Text>
+                  </View>
+                );
+              }
+              if (isUnknown) return null;
+              return null;
+            })()}
+            
+            {/* Show confidence if available and eligible (prefer eligibilityConfidencePercent from API) */}
+            {(donorProfile.eligibilityStatus === 'ELIGIBLE' || donorProfile.eligibilityStatus === 'eligible') && (donorProfile.eligibilityConfidencePercent != null || donorProfile.eligibilityConfidence != null) && (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Confidence:</Text>
+                <Text style={[styles.statusText, { textAlign: 'right' }]}>
+                  {(donorProfile.eligibilityConfidencePercent != null ? donorProfile.eligibilityConfidencePercent : (donorProfile.eligibilityConfidence ?? 0) * 100).toFixed(1)}%
+                </Text>
+              </View>
+            )}
+            
+            {/* Checked At - Always show with placeholder */}
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Checked At:</Text>
+              <Text style={[styles.statusText, { textAlign: 'right' }]}>
+                {donorProfile.eligibilityCheckedAt 
+                  ? new Date(donorProfile.eligibilityCheckedAt).toLocaleDateString() 
+                  : '—'}
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* Features Section (education stays) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Why Donate Blood?</Text>
-          <View style={styles.featuresGrid}>
-            {features.map((feature, index) => (
-              <View key={index} style={styles.featureCard}>
-                <View style={[styles.featureIcon, { backgroundColor: feature.color }]}>
-                  <IconSymbol name={feature.icon as any} size={24} color={semanticColors.textInverse} />
+        {/* Quick Access moved to subtle action cards above */}
+
+        {/* Donation History - Simplified */}
+        {hasDonorRecord && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Donation History</Text>
+            <View style={styles.requirementsCard}>
+              {loadingHistory && (
+                <View style={styles.requirementItem}>
+                  <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
+                  <Text style={styles.requirementText}>Loading...</Text>
                 </View>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDescription}>{feature.description}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Requirements Section (education) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation Requirements</Text>
-          <View style={styles.requirementsCard}>
-            {requirements.map((requirement, index) => (
-              <View key={index} style={styles.requirementItem}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colorsBase.palette.success} />
-                <Text style={styles.requirementText}>{requirement}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Process Steps (education) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation Process</Text>
-          <View style={styles.processSteps}>
-            <View style={styles.processStep}>
-              <View style={styles.stepNumber}>
-                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>1</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Registration</Text>
-                <Text style={styles.stepDescription}>Complete your donor profile</Text>
-              </View>
+              )}
+              {!loadingHistory && historyError && (
+                <View style={styles.requirementItem}>
+                  <IconSymbol name="exclamationmark.triangle.fill" size={20} color={semanticColors.interactiveDanger} />
+                  <Text style={styles.requirementText}>{historyError}</Text>
+                </View>
+              )}
+              {!loadingHistory && !historyError && history.length === 0 && (
+                <View style={styles.requirementItem}>
+                  <IconSymbol name="clock" size={20} color={semanticColors.textSecondary} />
+                  <Text style={styles.requirementText}>No donation records yet</Text>
+                </View>
+              )}
+              {!loadingHistory && !historyError && history.map((h, i) => {
+                const dt = new Date(h.donationDate).toLocaleDateString();
+                const vol = h.volumeMl ? `${h.volumeMl}ml` : '';
+                return (
+                  <View key={i} style={styles.requirementItem}>
+                    <IconSymbol name="heart.fill" size={20} color={semanticColors.interactivePrimary} />
+                    <Text style={styles.requirementText}>{dt}{vol ? ` · ${vol}` : ''}</Text>
+                  </View>
+                );
+              })}
             </View>
-            
-            <View style={styles.processStep}>
-              <View style={styles.stepNumber}>
-                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>2</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Health Screening</Text>
-                <Text style={styles.stepDescription}>Quick health check and questionnaire</Text>
-              </View>
-            </View>
-            
-            <View style={styles.processStep}>
-              <View style={styles.stepNumber}>
-                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>3</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Donation</Text>
-                <Text style={styles.stepDescription}>Safe and comfortable donation process</Text>
-              </View>
-            </View>
-            
-            <View style={styles.processStep}>
-              <View style={styles.stepNumber}>
-                <Text style={[styles.stepNumberText, { color: semanticColors.textInverse }]}>4</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Recovery</Text>
-                <Text style={styles.stepDescription}>Rest and refreshments provided</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {donorStatus === 'not_a_donor' && (
-          <View style={styles.ctaSection}>
-            <Text style={styles.ctaTitle}>Ready to Save Lives?</Text>
-            <Text style={styles.ctaText}>
-              Your donation can help up to 3 patients in need. Register today and become a hero.
-            </Text>
-            <TouchableOpacity style={styles.ctaButton} onPress={handleRegister}>
-              <Text style={[styles.ctaButtonText, { color: semanticColors.textInverse }]}>Start Registration</Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -330,34 +401,42 @@ const makeStyles = () => StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    paddingBottom: spacing.xxl,
   },
   scrollContentWithTabBar: {
     paddingBottom: 100,
   },
-  headerGradient: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    backgroundColor: semanticColors.interactivePrimary,
-    marginBottom: 16,
+  headerBannerWrap: {
+    alignSelf: 'center',
+    width: '92%',
+    marginBottom: spacing.md,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.md,
+    ...elevation.none,
   },
-  headerTitle: { color: semanticColors.textInverse, fontSize: 20, fontWeight: '800' },
-  headerSubtitle: { color: semanticColors.textInverse, fontSize: 13, fontWeight: '500', marginTop: 2, opacity: 0.9 },
+  headerTitle: { 
+    color: semanticColors.textInverse, 
+    ...typography.h2,
+    fontWeight: '700',
+  },
+  headerSubtitle: { 
+    color: semanticColors.textInverse, 
+    ...typography.bodySmall,
+    marginTop: spacing.xs / 2, 
+    opacity: 0.95,
+    fontWeight: '500',
+  },
   heroIcon: {
     width: 80,
     height: 80,
@@ -380,76 +459,92 @@ const makeStyles = () => StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  registerButton: {
-    backgroundColor: semanticColors.interactivePrimary,
+  actionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    marginBottom: 32,
-    boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
-    elevation: 4,
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  switchBtn: {
-    backgroundColor: colorsBase.palette.info,
+  actionCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderRadius: 12,
-    marginBottom: 16,
+    backgroundColor: semanticColors.bgSurface,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
+    ...elevation.none,
+    gap: spacing.sm,
   },
-  switchBtnText: {
-    color: semanticColors.textInverse,
-    fontSize: 14,
-    fontWeight: '700',
-    marginLeft: 8,
+  actionLabel: {
+    ...typography.bodySmall,
+    color: semanticColors.textPrimary,
+    fontWeight: '600',
   },
   statusCard: {
     backgroundColor: semanticColors.bgSurface,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
-    marginBottom: 24,
+    marginBottom: spacing.lg,
+    marginHorizontal: spacing.lg,
+    ...elevation.none,
   },
-  statusTitle: { fontSize: 18, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
-  statusValue: { fontSize: 16, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 12 },
-  statusRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  statusLabel: { fontSize: 14, color: semanticColors.textSecondary },
-  statusText: { fontSize: 14, color: semanticColors.textPrimary },
-  registerButtonText: {
-    color: semanticColors.textInverse,
+  statusTitle: { 
+    ...typography.h4,
+    fontWeight: '700', 
+    color: semanticColors.textPrimary, 
+    marginBottom: spacing.md,
+    letterSpacing: -0.2,
+  },
+  statusValue: { 
+    ...typography.body,
+    fontWeight: '600', 
+    color: semanticColors.textPrimary, 
+    marginBottom: spacing.md,
     fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
   },
-  matchesButton: {
-    backgroundColor: colorsBase.palette.info,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginBottom: 24,
-    boxShadow: '0px 4px 12px rgba(52, 152, 219, 0.25)',
-    elevation: 3,
+  statusRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
+    minHeight: 24,
+    width: '100%',
   },
-  matchesButtonText: {
-    color: semanticColors.textInverse,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  statusLabel: { 
+    ...typography.label,
+    color: semanticColors.textSecondary,
+    fontWeight: '500',
+    flexShrink: 0,
+    marginRight: spacing.md,
+    minWidth: 120,
   },
+  statusText: { 
+    ...typography.bodySmall,
+    color: semanticColors.textPrimary,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  
   section: {
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
+    marginHorizontal: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 20,
+    ...typography.h3,
     fontWeight: '600',
     color: semanticColors.textPrimary,
-    marginBottom: 16,
+    marginBottom: spacing.md,
+    letterSpacing: -0.3,
   },
   featuresGrid: {
     flexDirection: 'row',
@@ -463,8 +558,6 @@ const makeStyles = () => StyleSheet.create({
     width: '48%',
     marginBottom: 16,
     alignItems: 'center',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
   },
@@ -491,30 +584,29 @@ const makeStyles = () => StyleSheet.create({
   },
   requirementsCard: {
     backgroundColor: semanticColors.bgSurface,
-    borderRadius: 16,
-    padding: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
+    borderRadius: 20,
+    padding: spacing.lg,
+    ...elevation.none,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
   },
   requirementItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
   },
   requirementText: {
-    fontSize: 16,
+    ...typography.bodySmall,
     color: semanticColors.textPrimary,
-    marginLeft: 12,
+    marginLeft: spacing.md,
     flex: 1,
+    fontWeight: '500',
   },
   processSteps: {
     backgroundColor: semanticColors.bgSurface,
     borderRadius: 16,
     padding: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
   },
@@ -555,8 +647,6 @@ const makeStyles = () => StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
   },

@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors as themeColors } from '@/styles/commonStyles';
 import { IconSymbol, IconSymbolName } from '@/components/IconSymbol';
+import HeaderBanner from '@/components/HeaderBanner';
+import { semanticColors } from '@/constants/colors';
 
 type CTA = {
   icon: IconSymbolName;
@@ -20,7 +22,7 @@ export default function HeroCard({
   ctas?: CTA[];
 }) {
   return (
-    <View style={s.wrapper}>
+    <HeaderBanner style={s.wrapper}>
       <View style={s.dropBadge}>
         <IconSymbol name="drop.fill" size={18} color={themeColors.backgroundAlt} />
       </View>
@@ -33,7 +35,7 @@ export default function HeroCard({
               <TouchableOpacity
                 onPress={c.onPress}
                 activeOpacity={0.85}
-                style={[s.cta, { backgroundColor: c.bg || '#3498DB' }]}
+                style={[s.cta, { backgroundColor: c.bg || semanticColors.interactivePrimary }]}
               >
                 <IconSymbol name={c.icon} size={26} color="#FFFFFF" />
               </TouchableOpacity>
@@ -42,7 +44,7 @@ export default function HeroCard({
           ))}
         </View>
       ) : null}
-    </View>
+    </HeaderBanner>
   );
 }
 
@@ -50,10 +52,6 @@ const s = StyleSheet.create({
   wrapper: {
     alignSelf: 'center',
     width: '92%',
-    backgroundColor: themeColors.primary,
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 18,
     marginTop: 8,
   },
   dropBadge: {
@@ -84,14 +82,10 @@ const s = StyleSheet.create({
   cta: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    // Minimal style: no shadow/elevation
   },
   ctaLabel: {
     color: '#FFFFFF',

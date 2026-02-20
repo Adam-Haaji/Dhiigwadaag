@@ -4,12 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import colorsBase, { semanticColors } from '@/constants/colors';
+import colorsBase, { semanticColors, spacing, typography, elevation } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import api, { Donor } from "../service/api";
 import useAuth from '@/hooks/useAuth';
 import SelectField from '../components/SelectField';
 import { LOCATIONS as STD_LOCATIONS } from '@/constants/locations';
+import HeaderBanner from '@/components/HeaderBanner';
 
 export default function EmergencyRequest() {
   const { user, setUser } = useAuth();
@@ -104,33 +105,22 @@ export default function EmergencyRequest() {
         flex: 1,
         backgroundColor: semanticColors.bgAlt,
       },
-      headerCard: {
-        backgroundColor: semanticColors.interactiveDanger,
-        margin: 20,
-        marginTop: 12,
-        paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: 24,
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 4,
+      headerBannerWrap: {
+        marginHorizontal: spacing.lg,
+        marginTop: spacing.md,
+        marginBottom: spacing.md,
       },
       heroTitle: {
-        fontSize: 22,
-        fontWeight: '800',
+        ...typography.h2,
+        fontWeight: '700',
         color: semanticColors.textInverse,
-        marginBottom: 6,
+        marginBottom: spacing.sm,
+        letterSpacing: -0.3,
       },
       heroSubtitle: {
-        fontSize: 13,
+        ...typography.bodySmall,
         color: semanticColors.textInverse,
-        opacity: 0.9,
+        opacity: 0.95,
         fontWeight: '500',
       },
       header: {
@@ -155,13 +145,8 @@ export default function EmergencyRequest() {
         width: 40,
       },
       emergencyBanner: {
-        backgroundColor: semanticColors.interactiveDanger,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        margin: 20,
-        borderRadius: 12,
       },
       emergencyContent: {
         marginLeft: 12,
@@ -179,41 +164,38 @@ export default function EmergencyRequest() {
         opacity: 0.9,
       },
       filterContainer: {
-        paddingHorizontal: 20,
-        marginBottom: 16,
+        paddingHorizontal: spacing.lg,
+        marginBottom: spacing.md,
+        marginHorizontal: spacing.lg,
         backgroundColor: semanticColors.bgSurface,
-        borderRadius: 16,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
-        paddingVertical: 16,
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 3 },
-        elevation: 3,
+        paddingVertical: spacing.lg,
       },
       fieldLabel: {
-        fontSize: 14,
-        fontWeight: '700',
+        ...typography.label,
+        fontWeight: '600',
         color: semanticColors.textPrimary,
-        marginBottom: 8,
-        marginTop: 4,
+        marginBottom: spacing.sm,
+        marginTop: spacing.xs,
       },
       dropdown: {
         backgroundColor: semanticColors.bgSurface,
-        borderRadius: 12,
+        borderRadius: 14,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
-        marginBottom: 12,
+        marginBottom: spacing.md,
       },
       dropdownText: {
-        fontSize: 16,
+        ...typography.body,
         color: semanticColors.textPrimary,
+        fontWeight: '500',
       },
       placeholderText: {
         color: semanticColors.textSecondary,
@@ -237,96 +219,49 @@ export default function EmergencyRequest() {
       },
       searchBar: {
         backgroundColor: semanticColors.bgSurface,
-        borderRadius: 12,
+        borderRadius: 14,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
       },
       searchInput: {
         flex: 1,
-        fontSize: 16,
+        ...typography.body,
         color: semanticColors.textPrimary,
-        marginLeft: 12,
+        marginLeft: spacing.md,
       },
-      actionButtons: {
-        flexDirection: 'row',
-        paddingHorizontal: 20,
-        marginBottom: 20,
-        gap: 12,
-      },
-      createRequestButton: {
-        backgroundColor: semanticColors.borderStrong,
-        flex: 1,
+      rightActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
+        gap: spacing.sm,
       },
-      createRequestText: {
-        color: semanticColors.textInverse,
-        fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 8,
-      },
-      emergencyCallButton: {
-        backgroundColor: semanticColors.interactiveDanger,
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-      },
-      emergencyCallText: {
-        color: semanticColors.textInverse,
-        fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 8,
-      },
-      searchButton: {
-        backgroundColor: semanticColors.interactivePrimary,
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-      },
-      searchButtonText: {
-        color: semanticColors.textInverse,
-        fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 8,
-      },
+      // Action buttons removed visually; search auto-triggers on filter changes
       donorsList: {
         flex: 1,
       },
       donorsContent: {
-        paddingHorizontal: 20,
+        paddingHorizontal: spacing.lg,
       },
       sectionTitle: {
-        fontSize: 18,
+        ...typography.h3,
         fontWeight: '600',
         color: semanticColors.textPrimary,
-        marginBottom: 16,
+        marginBottom: spacing.md,
+        marginHorizontal: spacing.lg,
+        letterSpacing: -0.2,
       },
       donorCard: {
         backgroundColor: semanticColors.bgSurface,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: 20,
+        padding: spacing.lg,
+        marginBottom: spacing.md,
+        marginHorizontal: spacing.lg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 2,
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
       },
@@ -336,18 +271,19 @@ export default function EmergencyRequest() {
         flex: 1,
       },
       donorAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         backgroundColor: softAccent,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
+        marginRight: spacing.md,
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
       },
       donorAvatarText: {
-        fontSize: 24,
+        ...typography.h3,
+        fontWeight: '700',
       },
       donorDetails: {
         flex: 1,
@@ -356,24 +292,27 @@ export default function EmergencyRequest() {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        marginBottom: spacing.sm,
       },
       donorName: {
-        fontSize: 16,
+        ...typography.body,
         fontWeight: '600',
         color: semanticColors.textPrimary,
         flex: 1,
+        fontSize: 17,
       },
       bloodTypeBadge: {
-        backgroundColor: colorsBase.palette.success,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
+        backgroundColor: semanticColors.bgElevated,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
       },
       bloodTypeText: {
-        color: semanticColors.textInverse,
-        fontSize: 12,
-        fontWeight: '600',
+        color: semanticColors.textPrimary,
+        ...typography.caption,
+        fontWeight: '700',
       },
       donorMeta: {
         flexDirection: 'row',
@@ -385,26 +324,28 @@ export default function EmergencyRequest() {
         alignItems: 'center',
       },
       metaText: {
-        fontSize: 12,
+        ...typography.caption,
         color: semanticColors.textSecondary,
-        marginLeft: 4,
+        marginLeft: spacing.xs,
       },
       distanceText: {
-        fontSize: 12,
+        ...typography.caption,
         color: semanticColors.textSecondary,
       },
       contactButton: {
-        backgroundColor: colorsBase.palette.success,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 8,
+        backgroundColor: colorsBase.palette.brandSoft,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: 12,
       },
       contactButtonDisabled: {
-        backgroundColor: semanticColors.borderStrong,
+        backgroundColor: semanticColors.bgElevated,
+        borderColor: semanticColors.borderSubtle,
+        opacity: 0.7,
       },
       contactButtonText: {
         color: semanticColors.textInverse,
-        fontSize: 14,
+        ...typography.label,
         fontWeight: '600',
       },
       contactButtonTextDisabled: {
@@ -416,16 +357,17 @@ export default function EmergencyRequest() {
         paddingVertical: 60,
       },
       emptyStateText: {
-        fontSize: 18,
+        ...typography.h4,
         fontWeight: '600',
         color: semanticColors.textPrimary,
-        marginTop: 16,
-        marginBottom: 8,
+        marginTop: spacing.md,
+        marginBottom: spacing.sm,
       },
       emptyStateSubtext: {
-        fontSize: 14,
+        ...typography.bodySmall,
         color: semanticColors.textSecondary,
         textAlign: 'center',
+        paddingHorizontal: spacing.lg,
       },
       modalOverlay: {
         flex: 1,
@@ -490,11 +432,15 @@ export default function EmergencyRequest() {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Header Card (visual design only) */}
-      <View style={styles.headerCard}>
-        <Text style={styles.heroTitle}>Emergency</Text>
-        <Text style={styles.heroSubtitle}>Find donors immediately</Text>
-      </View>
+      {/* Unified Banner */}
+      <HeaderBanner style={styles.headerBannerWrap}>
+        <View style={styles.emergencyBanner}>
+          <View style={styles.emergencyContent}>
+            <Text style={styles.heroTitle}>Emergency</Text>
+            <Text style={styles.heroSubtitle}>Find donors immediately</Text>
+          </View>
+        </View>
+      </HeaderBanner>
 
       {/* Filter Form */}
       <View style={styles.filterContainer}>
@@ -518,17 +464,7 @@ export default function EmergencyRequest() {
           onChange={(v: string) => setSelectedLocation(v)}
         />
 
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <IconSymbol name="magnifyingglass" size={20} color={semanticColors.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search donors"
-            placeholderTextColor={semanticColors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+        {/* Search bar removed per design request; auto-search remains active */}
 
         {/* Clear Filters Button */}
         {(selectedBloodType || selectedLocation || searchQuery) && (
@@ -548,33 +484,7 @@ export default function EmergencyRequest() {
 
       {/* Emergency Form Controls removed */}
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity style={styles.searchButton} onPress={fetchDonors} disabled={loading}>
-          <IconSymbol name="magnifyingglass" size={20} color={semanticColors.textInverse} />
-          <Text style={styles.searchButtonText}>{loading ? 'Searching…' : 'Search'}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.emergencyCallButton} onPress={async () => {
-          try {
-            if (!selectedBloodType || !selectedLocation) {
-              setError('Please select blood type and location');
-              return;
-            }
-            if (role !== 'requester') {
-              try { const updated = await api.switchRole('requester'); const token = user?.token; await setUser({ token, user: updated }); } catch {}
-            }
-            // Broadcast an emergency alert without extra fields
-            await api.emergency({ bloodType: selectedBloodType, location: selectedLocation, message: searchQuery ? `Emergency: ${searchQuery}` : undefined });
-            router.push('/(home)/notification');
-          } catch (e: any) {
-            setError(e?.message || 'Emergency alert failed');
-          }
-        }}>
-          <IconSymbol name="phone.fill" size={20} color={semanticColors.textInverse} />
-          <Text style={styles.emergencyCallText}>Emergency Call</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Manual Search/Emergency buttons removed visually; search auto-triggers */}
 
       {/* Donors List */}
       <ScrollView 
@@ -597,9 +507,6 @@ export default function EmergencyRequest() {
               <View style={styles.donorDetails}>
                 <View style={styles.donorHeader}>
                   <Text style={styles.donorName}>{donor.name}</Text>
-                  <View style={styles.bloodTypeBadge}>
-                    <Text style={styles.bloodTypeText}>{donor.bloodType}</Text>
-                  </View>
                 </View>
                 
                 <View style={styles.donorMeta}>
@@ -620,12 +527,17 @@ export default function EmergencyRequest() {
               </View>
             </View>
             
-            <TouchableOpacity 
-              style={[styles.contactButton]}
-              onPress={() => handleContact(donor)}
-            >
-              <Text style={[styles.contactButtonText]}>Contact</Text>
-            </TouchableOpacity>
+            <View style={styles.rightActions}>
+              <View style={styles.bloodTypeBadge}>
+                <Text style={styles.bloodTypeText}>{donor.bloodType}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.contactButton}
+                onPress={() => handleContact(donor)}
+              >
+                <Text style={styles.contactButtonText}>Contact</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ))}
         
@@ -644,9 +556,6 @@ export default function EmergencyRequest() {
               <View style={styles.donorDetails}>
                 <View style={styles.donorHeader}>
                   <Text style={styles.donorName}>{donor.name}</Text>
-                  <View style={styles.bloodTypeBadge}>
-                    <Text style={styles.bloodTypeText}>{donor.bloodType}</Text>
-                  </View>
                 </View>
                 <View style={styles.donorMeta}>
                   <View style={styles.metaItem}>
@@ -662,8 +571,13 @@ export default function EmergencyRequest() {
                 </View>
               </View>
             </View>
-            <View style={[styles.contactButton, styles.contactButtonDisabled]}>
-              <Text style={[styles.contactButtonText, styles.contactButtonTextDisabled]}>Unavailable</Text>
+            <View style={styles.rightActions}>
+              <View style={styles.bloodTypeBadge}>
+                <Text style={styles.bloodTypeText}>{donor.bloodType}</Text>
+              </View>
+              <View style={[styles.contactButton, styles.contactButtonDisabled]}>
+                <Text style={[styles.contactButtonText, styles.contactButtonTextDisabled]}>Unavailable</Text>
+              </View>
             </View>
           </View>
         ))}

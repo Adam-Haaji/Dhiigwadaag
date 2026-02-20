@@ -33,7 +33,7 @@ export default function Button({
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+    Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
   };
   const handlePressOut = () => {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
@@ -67,6 +67,7 @@ export default function Button({
     styles.base,
     fullWidth && { alignSelf: 'stretch' },
     disabled && { opacity: 0.5 },
+    (isPrimary || isDanger) && styles.primaryBase,
     isSecondary && styles.secondary,
     isGhost && styles.ghost,
   ];
@@ -110,7 +111,13 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(44),
     overflow: 'hidden',
     backgroundColor: semanticColors.bgSurface,
-    ...elevation.sm,
+    ...elevation.none,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
+  },
+  primaryBase: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
   gradient: {
     flexDirection: 'row',

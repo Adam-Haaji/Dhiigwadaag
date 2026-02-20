@@ -27,9 +27,36 @@ export default function DonorRegistration() {
     bloodGroup: '',
     weightKg: '',
     lastDonationDate: '',
-    availabilityStatus: '',
     hb: '',
+    medicalCondition: 'None',
   });
+  
+  // Check if user already has a donor record - if yes, redirect to dashboard (don't show form again)
+  useEffect(() => {
+    (async () => {
+      try {
+        const donorData = await api.donorMe();
+        if (donorData?.exists) {
+          // User already has donor record - redirect to dashboard (form shown only once)
+          router.replace('/(home)/donor');
+          return;
+        }
+      } catch {}
+      
+      // Prefill from current profile (only if not already a donor)
+      try {
+        const me = await api.me();
+        setFormData(prev => ({
+          ...prev,
+          fullName: me?.name || prev.fullName,
+          email: me?.email || prev.email,
+          phone: me?.phone || prev.phone,
+          district: me?.location || prev.district,
+          bloodGroup: me?.bloodType || prev.bloodGroup,
+        }));
+      } catch {}
+    })();
+  }, []);
   const [focusedField, setFocusedField] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showIOSDatePicker, setShowIOSDatePicker] = useState(false);
@@ -50,6 +77,9 @@ export default function DonorRegistration() {
     ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ label: v, value: v }))
   ), []);
   const districtOptions = useMemo(() => LOCATION_OPTIONS, []);
+  const medicalConditionOptions = useMemo(() => (
+    ['None', 'Malaria', 'HIV', 'Hepatitis', 'Tuberculosis', 'Heart Disease', 'Diabetes', 'Cancer', 'Asthma', 'High Blood Pressure', 'Recent Surgery', 'Pregnant', 'Other'].map(v => ({ label: v, value: v }))
+  ), []);
   const totalSteps = 1;
 
 
@@ -101,7 +131,11 @@ export default function DonorRegistration() {
     return new Date(y, m, d);
   };
 
-  const handleBack = () => { router.back(); };
+  const handleBack = () => {
+    // Navigate back to previous screen
+    // This will return to request dashboard if user came from there
+    router.back();
+  };
 
   const openDatePicker = () => {
     const current = parseDate(formData.lastDonationDate) || new Date();
@@ -175,36 +209,41 @@ export default function DonorRegistration() {
     setSubmitting(true);
     setIneligibleReason(null);
     try {
-      // Ensure role is donor before calling donor-only endpoint
-      const currentRole = String(user?.user?.role || '').toLowerCase();
-      if (!(currentRole === 'donor' || currentRole === 'both' || currentRole === 'admin')) {
-        try {
-          const switched = await api.switchRole('donor');
-          if (switched) {
-            await setUser({ ...(user || {}), user: switched });
-          }
-        } catch (e) {
-          // If switch fails, fall through; server will respond with clearer error
-        }
-      }
-      const resp: any = await api.registerDonorEligibility({
-        age: Number(formData.age),
-        weightKg: Number(formData.weightKg),
+      // Allow any user to register as donor (role separation allows both requester and donor records)
+      // Create donor record using createDonor endpoint
+      const ageNum = Number(formData.age);
+      const dateOfBirth = deriveDobFromAge(ageNum);
+      
+      const resp: any = await api.createDonor({
+        fullName: formData.fullName,
+        dateOfBirth: dateOfBirth.toISOString(),
         gender: formData.gender.toLowerCase() === 'male' ? 'male' : 'female',
-        hb: Number(formData.hb),
-        bloodType: formData.bloodGroup,
-        location: formData.district,
-        lastDonationDate: formData.lastDonationDate ? toIso(formData.lastDonationDate) : undefined,
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
+        phone: formData.phone,
+        email: formData.email,
+        district: formData.district as any,
+        bloodGroup: formData.bloodGroup as any,
+        weightKg: Number(formData.weightKg),
+        consentGiven: true, // Default to true for registration
+        emergencyContact: {
+          name: formData.fullName || 'Emergency Contact',
+          relationship: 'Family',
+          phone: formData.phone || '',
+        },
+        lastDonationDate: formData.lastDonationDate ? toIso(formData.lastDonationDate) : null,
+        medicalCondition: formData.medicalCondition || 'None',
+        hb: formData.hb ? Number(formData.hb) : undefined, // Include hb field for eligibility check
+        // Always set to 'available' on registration - donor becomes unavailable only after donating
+        availabilityStatus: 'available',
       });
-      if (resp?.success) {
+      
+      if (resp?.donor || resp?.user) {
         if (resp?.user) await setUser({ ...(user || {}), user: resp.user });
-        Alert.alert('Eligibility', 'You are eligible to donate.', [
-          { text: 'OK', onPress: () => router.replace('/(home)') },
-        ]);
+        // Small delay to allow backend eligibility check to complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Immediately redirect to Donor Dashboard - no extra steps
+        router.replace('/(home)/donor');
       } else {
-        throw new Error(resp?.reason || 'Unknown response');
+        throw new Error(resp?.error || 'Unknown response');
       }
     } catch (e: any) {
       let msg = e?.message || 'Failed';
@@ -233,13 +272,13 @@ export default function DonorRegistration() {
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: semanticColors.bgAlt },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle, backgroundColor: semanticColors.bgElevated },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle, backgroundColor: semanticColors.bgSurface },
     backButton: { padding: 8 },
     headerTitle: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary },
     placeholder: { width: 40 },
     scrollView: { flex: 1 },
     scrollContent: { paddingHorizontal: 20, paddingVertical: 20 },
-    card: { backgroundColor: semanticColors.bgSurface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    card: { backgroundColor: semanticColors.bgSurface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle },
     cardTitle: { fontSize: 20, fontWeight: '800', color: semanticColors.interactivePrimary, marginBottom: 4 },
     cardSub: { color: semanticColors.textSecondary, marginBottom: 16 },
     inputGroup: { marginBottom: 16 },
@@ -249,7 +288,7 @@ export default function DonorRegistration() {
     dropdownItem: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: semanticColors.borderSubtle },
     dropdownText: { fontSize: 14, color: semanticColors.textPrimary },
     dropdownTextSelected: { fontWeight: '700', color: semanticColors.interactivePrimary },
-    registerBtn: { backgroundColor: semanticColors.interactivePrimary, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 8 },
+    registerBtn: { backgroundColor: semanticColors.interactivePrimary, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: semanticColors.borderSubtle },
     registerBtnText: { fontSize: 16, fontWeight: '700' },
     dateInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     dateText: { color: semanticColors.textPrimary, fontSize: 16 },
@@ -431,16 +470,19 @@ export default function DonorRegistration() {
             </Text>
             <IconSymbol name="calendar" size={18} color={semanticColors.textSecondary} />
           </TouchableOpacity>
-            <View style={styles.inputGroup}>
-              <SelectField
-                label="Availability"
-                required
-                placeholder="Select availability"
-                value={formData.availabilityStatus}
-                options={[{ label: 'Available', value: 'Available' }, { label: 'Unavailable', value: 'Unavailable' }]}
-                onChange={(v: string) => updateFormData('availabilityStatus', v)}
-              />
-            </View>
+
+          <View style={styles.inputGroup}>
+            <SelectField
+              label="Medical Condition"
+              required
+              placeholder="Select medical condition"
+              value={formData.medicalCondition}
+              options={medicalConditionOptions}
+              onChange={(v: string) => updateFormData('medicalCondition', v)}
+            />
+          </View>
+            {/* Availability field removed - donors are always 'available' on registration */}
+            {/* They become 'unavailable' only after clicking "I Have Donated" */}
 
             <TouchableOpacity
               style={[styles.registerBtn, (!isValid || submitting) && { opacity: 0.5 } ]}

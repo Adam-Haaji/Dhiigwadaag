@@ -20,7 +20,7 @@ export async function findPriorityMatches(patientBloodType, opts = null) {
   const tiers = TIER_TABLE[patientBloodType] || [];
   const district = opts?.district || null;
   const urgencyLevel = (opts?.urgencyLevel || '').toLowerCase();
-  const expandOrder = district ? getDistrictExpansionOrder(district) : [];
+  const expandOrder = district ? getDistrictExpansionOrder(district, urgencyLevel) : [];
   for (let i = 0; i < tiers.length; i++) {
     const allowedTypes = tiers[i];
     // Search same district first, then expand per order

@@ -37,12 +37,12 @@ export default function RequestCard({ request }: RequestCardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: semanticColors.bgSurface,
-    borderRadius: radii.lg,
+    borderRadius: radii.md,
     padding: moderateScale(spacing.md),
     marginBottom: moderateScale(spacing.sm),
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
-    ...elevation.sm,
+    ...elevation.none,
   },
   headerRow: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@ import Notification from '../models/Notification.js';
 import { getPriorityTiers, tierLabel } from '../utils/bloodPriority.js';
 import { getDistrictExpansionOrder } from '../utils/districtNeighbors.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
+import { isDBReady } from '../config/db.js';
 
 function norm(s) { return String(s || '').trim(); }
 
@@ -33,9 +34,9 @@ function within90Days(date) {
   return (Date.now() - last) < 90 * 24 * 60 * 60 * 1000;
 }
 
-async function findBestDonor({ bloodType, district }) {
+async function findBestDonor({ bloodType, district, urgencyLevel = 'normal' }) {
   const tiers = getPriorityTiers(bloodType);
-  const expansion = getDistrictExpansionOrder(district);
+  const expansion = getDistrictExpansionOrder(district, urgencyLevel);
   for (let i = 0; i < tiers.length; i++) {
     const allowed = tiers[i];
     // Same-district first then expansion order (function already returns [district, neighbors, rest])
@@ -81,16 +82,25 @@ export async function onRequestCreated(reqDocLike) {
     const bloodType = isBloodReq ? reqDocLike.bloodGroup : reqDocLike.bloodType;
     const district = isBloodReq ? reqDocLike.district : reqDocLike.location;
 
-    // Preconditions
+    // Preconditions: must be pending and not expired
     const pendingOk = isBloodReq ? status.toLowerCase() === 'pending' : status.toLowerCase() === 'pending';
     if (!pendingOk) {
-      console.info('[matcher] Skip: request not pending', { id, status });
+      // Request not pending - silently return (no console log to reduce terminal noise)
       return { matched: false, reason: 'not_pending' };
     }
+    
+    // Check if request has expired
+    const expiresAt = reqDocLike.expiresAt;
+    if (expiresAt && new Date(expiresAt) <= new Date()) {
+      // Request has expired - do not match
+      return { matched: false, reason: 'expired' };
+    }
 
-    const { donor, tierIndex, tierUsed } = await findBestDonor({ bloodType, district });
+    // Get urgencyLevel for location expansion
+    const urgencyLevel = isBloodReq ? reqDocLike.urgencyLevel : (String(reqDocLike.urgency || '').toLowerCase() === 'critical' ? 'critical' : 'normal');
+    const { donor, tierIndex, tierUsed } = await findBestDonor({ bloodType, district, urgencyLevel });
     if (!donor) {
-      console.info('[matcher] No donor found', { id, bloodType, district });
+      // No donor found - silently return (no console log to reduce terminal noise)
       return { matched: false, reason: 'no_donor' };
     }
 
@@ -101,30 +111,76 @@ export async function onRequestCreated(reqDocLike) {
       req.donorId = donor._id;
       req.matchedAt = new Date();
       await req.save();
-      // Reserve donor
+      // Reserve donor (set matchedRequest but keep availabilityStatus as 'available')
+      // Donor will only become 'unavailable' after clicking "I Have Donated"
       if (donor._src === 'User') {
-        await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 90*24*60*60*1000) } }).catch(()=>{});
+        // For legacy User donors, just mark as matched (don't change availability yet)
+        await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'available', availability: true } }).catch(()=>{});
       } else {
-        await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id, availabilityStatus: 'unavailable' } }).catch(()=>{});
+        await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id } }).catch(()=>{});
+        // Keep availabilityStatus as 'available' - only set to 'unavailable' after fulfillment
       }
-      // Notify donor and requester
+      // Notify donor and requester with detailed information
       const notes = [];
+      
+      // Get requester details for donor notification
+      const requesterUser = await User.findById(req.requesterId).select('name phone location').lean().catch(() => null);
+      const requesterName = requesterUser?.name || req.contactPerson || 'Requester';
+      const requesterPhone = requesterUser?.phone || req.contactPhone || '';
+      const requesterDistrict = requesterUser?.location || req.district || '';
+      
+      // Calculate time remaining until expiry
+      const nowTime = new Date();
+      const requestExpiresAt = req.expiresAt ? new Date(req.expiresAt) : null;
+      let timeRemaining = '';
+      if (requestExpiresAt && requestExpiresAt > nowTime) {
+        const hoursRemaining = Math.floor((requestExpiresAt - nowTime) / (1000 * 60 * 60));
+        const minutesRemaining = Math.floor(((requestExpiresAt - nowTime) % (1000 * 60 * 60)) / (1000 * 60));
+        timeRemaining = `${hoursRemaining}h ${minutesRemaining}m`;
+      }
+      
+      // Notify requester: donor matched
       notes.push({
         userId: req.requesterId,
         title: 'Donor Matched',
         message: `A donor has been found for ${req.patientName} (${req.bloodGroup}) in ${req.district}.`,
         type: 'request',
         urgent: String(req.urgencyLevel).toLowerCase() === 'critical',
-        meta: { requestId: req._id, status: 'matched', tier: tierLabel(tierIndex) },
+        meta: { 
+          requestId: req._id, 
+          status: 'matched', 
+          tier: tierLabel(tierIndex),
+          // Donor details will be shown after accept/fulfilled (privacy)
+        },
       });
+      
+      // Notify donor: matched with requester details
       if (donor.user) {
+        const donorDoc = await Donor.findById(donor._id).select('fullName phone district bloodGroup').lean().catch(() => null);
         notes.push({
           userId: donor.user,
           title: 'You are matched',
-          message: `You are matched to donate ${req.bloodGroup} in ${req.district}.`,
+          message: `You are matched to donate ${req.bloodGroup} for ${req.patientName} in ${req.district}. ${timeRemaining ? `Time remaining: ${timeRemaining}` : ''}`,
           type: 'request',
           urgent: String(req.urgencyLevel).toLowerCase() === 'critical',
-          meta: { requestId: req._id, status: 'matched', tier: tierLabel(tierIndex) },
+          meta: { 
+            type: 'MATCHED',
+            requestId: req._id, 
+            matchId: req._id,
+            donorId: donor._id,
+            status: 'matched', 
+            tier: tierLabel(tierIndex),
+            // Requester details for donor
+            requesterName,
+            requesterPhone,
+            requesterDistrict,
+            bloodNeeded: req.bloodGroup,
+            unitsNeeded: req.units || 1,
+            urgencyLevel: req.urgencyLevel,
+            timeRemaining,
+            patientName: req.patientName,
+            hospitalName: req.hospitalName || '',
+          },
         });
       }
       if (notes.length) await Notification.insertMany(notes);
@@ -140,12 +196,31 @@ export async function onRequestCreated(reqDocLike) {
     req.matchedTier = tierLabel(tierIndex);
     req.tierUsed = tierUsed;
     await req.save();
-    // Reserve donor
+    // Reserve donor (set matchedRequest but keep availabilityStatus as 'available')
+    // Donor will only become 'unavailable' after clicking "I Have Donated"
     if (donor._src === 'User') {
-      await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'unavailable', availability: false, unavailableUntil: new Date(Date.now() + 90*24*60*60*1000) } }).catch(()=>{});
+      // For legacy User donors, just mark as matched (don't change availability yet)
+      await User.findByIdAndUpdate(donor.user, { $set: { donorStatus: 'available', availability: true } }).catch(()=>{});
     } else {
-      await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id, availabilityStatus: 'unavailable' } }).catch(()=>{});
+      await Donor.findByIdAndUpdate(donor._id, { $set: { matchedRequest: id } }).catch(()=>{});
+      // Keep availabilityStatus as 'available' - only set to 'unavailable' after fulfillment
     }
+    // Get requester details for donor notification (legacy Request model)
+    const requesterUser = await User.findById(req.requesterId).select('name phone location').lean().catch(() => null);
+    const requesterName = requesterUser?.name || req.requester?.name || 'Requester';
+    const requesterPhone = requesterUser?.phone || req.requester?.phone || req.contactPhone || '';
+    const requesterDistrict = requesterUser?.location || req.location || '';
+    
+    // Calculate time remaining until expiry
+    const nowTime = new Date();
+    const requestExpiresAt = req.expiresAt ? new Date(req.expiresAt) : null;
+    let timeRemaining = '';
+    if (requestExpiresAt && requestExpiresAt > nowTime) {
+      const hoursRemaining = Math.floor((requestExpiresAt - nowTime) / (1000 * 60 * 60));
+      const minutesRemaining = Math.floor(((requestExpiresAt - nowTime) % (1000 * 60 * 60)) / (1000 * 60));
+      timeRemaining = `${hoursRemaining}h ${minutesRemaining}m`;
+    }
+    
     const notes = [];
     if (req.requesterId) {
       notes.push({
@@ -158,13 +233,28 @@ export async function onRequestCreated(reqDocLike) {
       });
     }
     if (donor.user) {
+      const donorDoc = await Donor.findById(donor._id).select('fullName phone district bloodGroup').lean().catch(() => null);
       notes.push({
         userId: donor.user,
         title: 'You are matched',
-        message: `You are matched to donate ${req.bloodType} in ${req.location}.`,
+        message: `You are matched to donate ${req.bloodType} for ${req.patientName} in ${req.location}. ${timeRemaining ? `Time remaining: ${timeRemaining}` : ''}`,
         type: 'request',
         urgent: String(req.urgency).toLowerCase() !== 'normal',
-        meta: { requestId: req._id, status: 'Matched', tier: tierLabel(tierIndex) },
+        meta: { 
+          requestId: req._id, 
+          status: 'Matched', 
+          tier: tierLabel(tierIndex),
+          // Requester details for donor
+          requesterName,
+          requesterPhone,
+          requesterDistrict,
+          bloodNeeded: req.bloodType,
+          unitsNeeded: req.units || 1,
+          urgencyLevel: String(req.urgency).toLowerCase(),
+          timeRemaining,
+          patientName: req.patientName,
+          hospitalName: req.hospitalName || '',
+        },
       });
     }
     if (notes.length) await Notification.insertMany(notes);
@@ -201,7 +291,7 @@ export async function onDonorAvailable(donorLike) {
         return onRequestCreated(r);
       }
     }
-    console.info('[matcher] Donor available but no pending request matched', { donor: donor._id });
+    // Donor available but no pending request matched - silently return (no console log to reduce terminal noise)
     return { matched: false, reason: 'no_pending_request' };
   } catch (e) {
     console.error('[matcher] Failed onDonorAvailable', e?.message || e);
@@ -214,6 +304,10 @@ export default { onRequestCreated, onDonorAvailable };
 // Backfill matching for existing pending requests (both models)
 export async function backfillPending({ limit = 100 } = {}) {
   let matched = 0;
+  if (!isDBReady()) {
+    // Database not ready; skip backfill for now
+    return { matched };
+  }
   try {
     const legacy = await Request.find({ status: 'Pending' }).limit(limit).lean();
     for (const r of legacy) {
@@ -232,6 +326,6 @@ export async function backfillPending({ limit = 100 } = {}) {
   } catch (e) {
     console.error('[matcher] backfill blood-requests error:', e?.message || e);
   }
-  console.log(`[matcher] backfill complete. Matched: ${matched}`);
+  // Backfill complete - silently return (no console log to reduce terminal noise)
   return { matched };
 }

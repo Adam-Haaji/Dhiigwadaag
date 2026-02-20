@@ -8,6 +8,7 @@ import HeroCard from '@/components/HeroCard';
 import { StatusBar } from 'expo-status-bar';
 import colorsBase, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
+import { ChatbotButton, ChatbotPanel } from '@/components/chatbot';
 
 export default function RequesterDashboard() {
   const { user, setUser } = useAuth();
@@ -15,6 +16,7 @@ export default function RequesterDashboard() {
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const s = useMemo(
     () =>
@@ -38,11 +40,6 @@ export default function RequesterDashboard() {
           padding: 16,
           borderRadius: 16,
           marginTop: 12,
-          shadowColor: '#000',
-          shadowOpacity: 0.06,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 3,
           borderWidth: 1,
           borderColor: semanticColors.borderSubtle,
         },
@@ -98,22 +95,7 @@ export default function RequesterDashboard() {
           ]}
         />
 
-        {/* Role switch action */}
-        <View style={s.topActionsRow}>
-          <Pressable
-            onPress={async () => {
-              try {
-                const updated = await api.switchRole('donor');
-                const token = user?.token;
-                await setUser({ token, user: updated });
-                router.replace('/donorDashboard');
-              } catch {}
-            }}
-            style={({ pressed }) => [s.switchPill, pressed && { transform: [{ scale: 0.98 }] }]}
-          >
-            <Text style={s.switchPillText}>⇄ Switch to Donor</Text>
-          </Pressable>
-        </View>
+        {/* Role switching removed per policy */}
 
         {/* Your Request Card */}
         <View style={s.card}>
@@ -143,6 +125,10 @@ export default function RequesterDashboard() {
           <Text style={s.profileBtnText}>Go to Profile</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Floating chatbot button — Requester Assistant */}
+      <ChatbotButton onPress={() => setChatOpen(true)} />
+      <ChatbotPanel visible={chatOpen} onClose={() => setChatOpen(false)} />
     </SafeAreaView>
   );
 }

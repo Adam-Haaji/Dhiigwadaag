@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useFocusEffect } from '@react-navigation/native';
 import { Stack, router } from "expo-router";
-import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity, Animated, RefreshControl } from "react-native";
+import { ScrollView, StyleSheet, View, Text, Platform, TouchableOpacity, Animated, RefreshControl, Pressable } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, commonStyles } from "@/styles/commonStyles";
@@ -10,6 +10,9 @@ import { colors as theme, spacing as themeSpacing, radii as themeRadii, moderate
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
+import HeaderBanner from '@/components/HeaderBanner';
+import { Ionicons } from '@expo/vector-icons';
+import { getHomeModePreference } from '@/service/homeMode';
 // Connectivity diagnostics removed per request
 
 // Lazy-load LinearGradient like in Notifications to keep consistent header rendering
@@ -21,6 +24,12 @@ export default function HomeIndex() {
   const role = String(user?.user?.role || '').toLowerCase();
   const { isDark, toggleDark } = useTheme();
   // Removed old diagnostics state & handler (visual-only upgrade).
+
+  // Lightweight entrance animation for body content (visual only)
+  const bodyIntro = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(bodyIntro, { toValue: 1, duration: 420, useNativeDriver: true }).start();
+  }, [bodyIntro]);
 
   // Pulse animation for Emergency action
   const pulse = useRef(new Animated.Value(0)).current;
@@ -35,32 +44,115 @@ export default function HomeIndex() {
     return () => loop.stop();
   }, [pulse]);
 
-  // Dashboard stats fetched from backend
-  const [totals, setTotals] = useState({ donors: 0, requests: 0, saved: 0 });
+  // Donor status data (for donor dashboard)
+  const [donorProfile, setDonorProfile] = useState<any>(null);
+  const [hasDonorRecord, setHasDonorRecord] = useState(false);
+  
+  // Requester requests data (for requester dashboard)
+  const [recentRequests, setRecentRequests] = useState<any[]>([]);
+  const [hasRequesterRecord, setHasRequesterRecord] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const fetchStats = useCallback(async () => {
+
+  const [homeMode, setHomeMode] = useState<'donor'|'requester'|null>(null);
+
+  const isDonorCapable = hasDonorRecord || role === 'donor' || role === 'both' || role === 'admin';
+  const isRequesterCapable = hasRequesterRecord || role === 'requester' || role === 'both' || role === 'admin';
+
+  // Check record existence (used for Home separation; does not change backend/endpoints)
+  const checkRecords = useCallback(async () => {
     try {
-      const data = await api.statsSummary();
-      const d = Number(data?.totalDonors) || 0;
-      const r = Number(data?.totalRequests) || 0;
-      const s = Number(data?.livesSaved) || 0;
-      setTotals({ donors: d, requests: r, saved: s });
-    } catch {}
+      const d = await api.donorMe();
+      setHasDonorRecord(!!d?.exists);
+      if (d?.exists && d?.donor) setDonorProfile(d.donor);
+    } catch {
+      setHasDonorRecord(false);
+    }
+    try {
+      const r = await api.requesterMe();
+      setHasRequesterRecord(!!r?.exists);
+    } catch {
+      setHasRequesterRecord(false);
+    }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-  useFocusEffect(useCallback(() => { fetchStats(); }, [fetchStats]));
+  // Load donor profile if user is a donor
+  const loadDonorProfile = useCallback(async () => {
+    if (!isDonorCapable) return;
+    try {
+      const donorData = await api.donorMe();
+      if (donorData?.exists && donorData?.donor) {
+        setHasDonorRecord(true);
+        setDonorProfile(donorData.donor);
+      }
+    } catch {}
+  }, [role]);
 
-  // Periodic refresh every 30s to keep stats up-to-date
+  // Load recent requests if user is a requester
+  const loadRecentRequests = useCallback(async () => {
+    if (!isRequesterCapable) return;
+    try {
+      const requesterData = await api.requesterMe();
+      if (requesterData?.exists) {
+        setHasRequesterRecord(true);
+      }
+
+      const legacyRaw: any = await api.listRequests().catch(() => []);
+      const legacy: any[] = Array.isArray(legacyRaw)
+        ? legacyRaw
+        : (Array.isArray(legacyRaw?.requests) ? legacyRaw.requests : []);
+
+      const brRaw: any = await (api as any).listMyBloodRequests?.().catch(() => ({ requests: [] }));
+      const bloodRequests: any[] = Array.isArray(brRaw)
+        ? brRaw
+        : (Array.isArray(brRaw?.requests) ? brRaw.requests : []);
+
+      const merged = [
+        ...legacy.map((r: any) => ({
+          _id: r._id,
+          patientName: r.patientName,
+          bloodType: r.bloodType,
+          location: r.location,
+          status: r.status,
+          createdAt: r.createdAt,
+        })),
+        ...bloodRequests.map((r: any) => ({
+          _id: r._id,
+          patientName: r.patientName,
+          bloodType: r.bloodGroup || r.bloodType,
+          location: r.district || r.location,
+          status: r.status,
+          createdAt: r.createdAt,
+        })),
+      ];
+
+      // Get last 3 requests, sorted by date
+      const sorted = merged.sort((a: any, b: any) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      setRecentRequests(sorted.slice(0, 3));
+    } catch {}
+  }, [role]);
+
   useEffect(() => {
-    const id = setInterval(() => { fetchStats(); }, 30000);
-    return () => clearInterval(id);
-  }, [fetchStats]);
+    checkRecords();
+  }, [loadDonorProfile, loadRecentRequests]);
+
+  useFocusEffect(useCallback(() => {
+    checkRecords();
+    loadDonorProfile();
+    loadRecentRequests();
+  }, [loadDonorProfile, loadRecentRequests]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await fetchStats(); } finally { setRefreshing(false); }
-  }, [fetchStats]);
+    try {
+      await Promise.all([checkRecords(), loadDonorProfile(), loadRecentRequests()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [checkRecords, loadDonorProfile, loadRecentRequests]);
 
   const bloodTips = [
     {
@@ -80,6 +172,33 @@ export default function HomeIndex() {
     },
   ];
 
+  // Visual-only blood group quick-view
+  const bloodGroups = useMemo(() => (['A+','A-','B+','B-','AB+','AB-','O+','O-'] as const), []);
+
+  // Resolve whether Home should show DonorHome vs RequesterHome
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const pref = await getHomeModePreference();
+      if (cancelled) return;
+
+      if (isDonorCapable && !isRequesterCapable) return setHomeMode('donor');
+      if (isRequesterCapable && !isDonorCapable) return setHomeMode('requester');
+
+      // If both, prefer stored user choice; else fallback to role field
+      if (isDonorCapable && isRequesterCapable) {
+        if (pref) return setHomeMode(pref);
+        if (role === 'donor') return setHomeMode('donor');
+        if (role === 'requester') return setHomeMode('requester');
+        return setHomeMode('requester');
+      }
+
+      // Neither: show requester-ish minimal home
+      setHomeMode('requester');
+    })();
+    return () => { cancelled = true; };
+  }, [isDonorCapable, isRequesterCapable, role]);
+
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
@@ -89,11 +208,12 @@ export default function HomeIndex() {
     scrollContent: { paddingHorizontal: themeSpacing.xl, paddingVertical: themeSpacing.lg },
     scrollContentWithTabBar: { paddingBottom: 100 },
     headerGradient: {
-      paddingHorizontal: themeSpacing.xl,
-      paddingTop: themeSpacing.lg,
-      paddingBottom: themeSpacing.xl,
-      borderBottomLeftRadius: 20,
-      borderBottomRightRadius: 20,
+      // legacy gradient container (kept to minimize churn), no longer used
+      marginBottom: themeSpacing.md,
+    },
+    headerBannerWrap: {
+      alignSelf: 'center',
+      width: '92%',
       marginBottom: themeSpacing.md,
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -113,21 +233,179 @@ export default function HomeIndex() {
       borderColor: 'rgba(255,255,255,0.35)',
       backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(13,13,13,0.35)',
     },
-    statRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: themeSpacing.lg },
-    statCardNew: {
-      flex: 1, backgroundColor: semanticColors.bgSurface, borderRadius: themeRadii.md, borderWidth: 1, borderColor: semanticColors.borderSubtle,
-      paddingVertical: themeSpacing.md, paddingHorizontal: themeSpacing.md, alignItems: 'flex-start', marginHorizontal: 4,
+    statusSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: themeSpacing.md },
+    statusSummaryItem: { flex: 1, backgroundColor: semanticColors.bgAlt, borderRadius: themeRadii.md, padding: themeSpacing.md, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    statusSummaryLabel: { fontSize: responsiveFont(12), color: semanticColors.textSecondary, marginBottom: 4, fontWeight: '500' },
+    statusSummaryValue: { fontSize: responsiveFont(14), fontWeight: '600', color: semanticColors.textPrimary },
+    requestPreviewItem: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      paddingVertical: themeSpacing.md, 
+      borderBottomWidth: 1, 
+      borderBottomColor: semanticColors.borderSubtle,
     },
-    statIconWrap: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    statValueNew: { fontSize: responsiveFont(22), fontWeight: '800', color: semanticColors.textPrimary, marginBottom: 2 },
-    statLabelNew: { fontSize: responsiveFont(12), color: semanticColors.textSecondary },
+    requestPreviewTitle: { fontSize: responsiveFont(15), fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 4 },
+    requestPreviewMeta: { fontSize: responsiveFont(12), color: semanticColors.textSecondary },
+    requestPreviewButton: { 
+      backgroundColor: theme.primary, 
+      paddingVertical: 8, 
+      paddingHorizontal: 16, 
+      borderRadius: 8,
+    },
+    requestPreviewButtonText: { 
+      color: semanticColors.textInverse, 
+      fontSize: responsiveFont(12), 
+      fontWeight: '600',
+    },
+    emptyState: { 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      paddingVertical: themeSpacing.xl,
+    },
+    emptyStateText: { 
+      fontSize: responsiveFont(14), 
+      color: semanticColors.textSecondary, 
+      marginTop: themeSpacing.sm,
+    },
     sectionCard: { backgroundColor: semanticColors.bgSurface, borderRadius: themeRadii.lg, borderWidth: 1, borderColor: semanticColors.borderSubtle, padding: themeSpacing.lg, marginBottom: themeSpacing.lg },
     sectionTitleNew: { fontSize: responsiveFont(16), fontWeight: '700', color: semanticColors.textPrimary, marginBottom: themeSpacing.md },
+
+    // Requester tips
+    requesterTips: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: themeRadii.lg,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      padding: themeSpacing.lg,
+      marginBottom: themeSpacing.lg,
+    },
+    requesterTipRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: themeSpacing.md,
+      paddingVertical: themeSpacing.sm,
+    },
+    requesterTipIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+      marginTop: 2,
+    },
+    requesterTipTitle: {
+      fontSize: responsiveFont(14),
+      fontWeight: '800',
+      color: semanticColors.textPrimary,
+      marginBottom: 2,
+    },
+    requesterTipText: {
+      fontSize: responsiveFont(12.5),
+      color: semanticColors.textSecondary,
+      lineHeight: responsiveFont(18),
+    },
+
+    // Blood Group quick-view (visual only)
+    bloodSection: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: themeRadii.lg,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      padding: themeSpacing.lg,
+      marginBottom: themeSpacing.lg,
+    },
+    bloodGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: themeSpacing.md,
+      justifyContent: 'space-between',
+    },
+    bloodTile: {
+      width: '22%',
+      aspectRatio: 1,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: themeSpacing.sm,
+    },
+    bloodTilePressed: {
+      transform: [{ scale: 0.98 }],
+      backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.05)',
+    },
+    bloodIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+      backgroundColor: isDark ? 'rgba(229,57,53,0.18)' : 'rgba(229,57,53,0.10)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(229,57,53,0.28)' : 'rgba(229,57,53,0.18)',
+    },
+    bloodLabel: {
+      fontSize: responsiveFont(12),
+      fontWeight: '800',
+      color: semanticColors.textPrimary,
+      letterSpacing: 0.2,
+    },
+
+    // Premium tips list (only for Blood Donation Tips section)
+    tipsList: {
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: themeRadii.lg,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      overflow: 'hidden',
+    },
+    tipItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: themeSpacing.md,
+      paddingHorizontal: themeSpacing.md,
+      backgroundColor: 'transparent',
+    },
+    tipItemPressed: {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    },
+    tipDivider: {
+      height: 1,
+      backgroundColor: semanticColors.borderSubtle,
+      marginLeft: themeSpacing.md,
+    },
+    tipIconWrapNew: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: themeSpacing.md,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+    },
+    tipTitleNew: {
+      fontSize: responsiveFont(15),
+      fontWeight: '800',
+      color: semanticColors.textPrimary,
+      marginBottom: 2,
+    },
+    tipDescNew: {
+      fontSize: responsiveFont(12.5),
+      color: semanticColors.textSecondary,
+      lineHeight: responsiveFont(18),
+    },
     actionsRow: { flexDirection: 'row', gap: themeSpacing.md, justifyContent: 'space-between' },
     actionBtn: { flex: 1, borderRadius: themeRadii.lg, overflow: 'hidden' },
     actionGradient: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingVertical: moderateScale(themeSpacing.lg), paddingHorizontal: moderateScale(themeSpacing.md), gap: moderateScale(8) },
-    actionBtnPrimary: { backgroundColor: theme.primary, shadowColor: '#C62828', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
-    actionBtnDanger: { backgroundColor: '#E53935', shadowColor: '#E53935', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 8 },
+    actionBtnPrimary: { backgroundColor: theme.primary },
+    actionBtnDanger: { backgroundColor: '#E53935' },
     actionGradientEmergency: { backgroundColor: '#E53935' },
     actionIcon: { width: moderateScale(42), height: moderateScale(42), borderRadius: moderateScale(21), alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
     actionIconPrimary: { backgroundColor: 'rgba(255,255,255,0.18)' },
@@ -136,8 +414,14 @@ export default function HomeIndex() {
     actionLabelPrimary: { letterSpacing: 0.3 },
     actionLabelDanger: { letterSpacing: 0.3 },
     tipCard: {
-      backgroundColor: semanticColors.bgSurface, borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
-      ...(Platform.select({ web: { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)' } }) as any),
+      backgroundColor: semanticColors.bgSurface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
     },
     tipIcon: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
     tipContent: { flex: 1 },
@@ -182,21 +466,29 @@ export default function HomeIndex() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header (match Notification header style) */}
-        <LinearGradient
-          colors={[theme.primary, '#FF4747']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+        {/* Unified top banner */}
+        <HeaderBanner style={styles.headerBannerWrap}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
-                <IconSymbol name="heart.fill" size={18} color={semanticColors.textInverse} />
+                <IconSymbol
+                  name={homeMode === 'donor' ? 'heart.fill' : 'drop.fill'}
+                  size={18}
+                  color={semanticColors.textInverse}
+                />
               </View>
               <View>
-                <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Welcome Back!</Text>
-                <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Save lives, donate blood</Text>
+                {homeMode === 'donor' ? (
+                  <>
+                    <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Welcome Back!</Text>
+                    <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Save lives, donate blood</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Need Blood?</Text>
+                    <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Create a request and reach donors fast</Text>
+                  </>
+                )}
               </View>
             </View>
 
@@ -211,68 +503,213 @@ export default function HomeIndex() {
               <IconSymbol name="moon.fill" size={18} color={isDark ? '#121212' : '#FFFFFF'} />
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </HeaderBanner>
 
-        {/* Stats Row */}
-        <View style={styles.statRow}>
-          <View style={styles.statCardNew}>
-            <View style={[styles.statIconWrap, { backgroundColor: `${colors.primary}15` }]}>
-              <IconSymbol name={"person.3.fill" as any} size={18} color={colors.primary} />
-            </View>
-            <Text style={styles.statValueNew}>{totals.donors}</Text>
-            <Text style={styles.statLabelNew}>Total Donors</Text>
-          </View>
-          <View style={styles.statCardNew}>
-            <View style={[styles.statIconWrap, { backgroundColor: `${colors.secondary}15` }]}>
-              <IconSymbol name={"plus.circle.fill" as any} size={18} color={colors.secondary} />
-            </View>
-            <Text style={styles.statValueNew}>{totals.requests}</Text>
-            <Text style={styles.statLabelNew}>Requests</Text>
-          </View>
-          <View style={styles.statCardNew}>
-            <View style={[styles.statIconWrap, { backgroundColor: `${colors.success}15` }]}>
-              <IconSymbol name={"heart.fill" as any} size={18} color={colors.success} />
-            </View>
-            <Text style={styles.statValueNew}>{totals.saved}</Text>
-            <Text style={styles.statLabelNew}>Lives Saved</Text>
-          </View>
-        </View>
+        {homeMode === 'donor' && (
+          <>
+            {/* Blood Group quick-view (donor home only) */}
+            <Animated.View
+              style={{
+                opacity: bodyIntro,
+                transform: [
+                  {
+                    translateY: bodyIntro.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
+                  },
+                ],
+              }}
+            >
+              <View style={styles.bloodSection}>
+                <Text style={styles.sectionTitleNew}>Blood Group</Text>
+                <View style={styles.bloodGrid}>
+                  {bloodGroups.map((bg) => (
+                    <Pressable
+                      key={bg}
+                      onPress={() => {}}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Blood group ${bg}`}
+                      style={({ pressed }) => [styles.bloodTile, pressed && styles.bloodTilePressed]}
+                    >
+                      <View style={styles.bloodIconWrap}>
+                        <Ionicons name="water" size={16} color={isDark ? '#FFB3B3' : '#C62828'} />
+                      </View>
+                      <Text style={styles.bloodLabel}>{bg}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </Animated.View>
 
-        {/* Quick Actions */}
-        {role !== 'none' && (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleNew}>Quick Actions</Text>
-          <View style={styles.actionsRow}>
-            {/* Request Blood (Primary CTA) */}
-            {(role === 'requester' || role === 'both' || role === 'admin') && (
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push('/createRequest')} activeOpacity={0.9}>
-              <LinearGradient colors={[theme.primary, '#E53935']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGradient}>
-                <View style={[styles.actionIcon, styles.actionIconPrimary]}> 
-                  <IconSymbol name="drop.fill" size={20} color={semanticColors.textInverse} />
-                </View>
-                <Text style={[styles.actionLabel, styles.actionLabelPrimary, { color: semanticColors.textInverse }]}>Request Blood</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            )}
-            {/* Emergency Alert (Pulse emphasis) */}
-            {(role === 'requester' || role === 'both' || role === 'admin') && (
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]} onPress={() => router.push('/emergencyRequest')} activeOpacity={0.9}>
-              <Animated.View
-                style={[styles.actionGradient, styles.actionGradientEmergency, {
-                  transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }],
-                  shadowOpacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.4] })
-                }]}
-              >
-                <View style={[styles.actionIcon, styles.actionIconDanger]}> 
-                  <IconSymbol name="bell.fill" size={20} color={semanticColors.textInverse} />
-                </View>
-                <Text style={[styles.actionLabel, styles.actionLabelDanger, { color: semanticColors.textInverse }]}>Emergency Alert</Text>
-              </Animated.View>
-            </TouchableOpacity>
-            )}
-          </View>
-        </View>
+            {/* Primary Actions */}
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitleNew}>Quick Actions</Text>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.actionBtnPrimary]} 
+                  onPress={() => router.push('/(home)/notification')} 
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient colors={[theme.primary, '#E53935']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGradient}>
+                    <View style={[styles.actionIcon, styles.actionIconPrimary]}> 
+                      <IconSymbol name="bell.fill" size={20} color={semanticColors.textInverse} />
+                    </View>
+                    <Text style={[styles.actionLabel, styles.actionLabelPrimary, { color: semanticColors.textInverse }]}>View Matched Requests</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Blood Donation Tips (donor home only) */}
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitleNew}>Blood Donation Tips</Text>
+              <View style={styles.tipsList}>
+                {bloodTips.map((tip, index) => {
+                  const icon = tip.title === 'Stay Hydrated'
+                    ? 'water'
+                    : (tip.title === 'Eat Iron-Rich Foods' ? 'leaf' : 'moon');
+                  const tint = tip.title === 'Stay Hydrated'
+                    ? (isDark ? '#8EC5FF' : '#1976D2')
+                    : (tip.title === 'Eat Iron-Rich Foods' ? (isDark ? '#A5F3C4' : '#2E7D32') : (isDark ? '#FFD59A' : '#F9A825'));
+                  const bg = isDark
+                    ? 'rgba(255,255,255,0.06)'
+                    : 'rgba(0,0,0,0.03)';
+                  return (
+                    <View key={index}>
+                      <Pressable
+                        onPress={() => {}}
+                        accessibilityRole="button"
+                        accessibilityLabel={tip.title}
+                        style={({ pressed }) => [styles.tipItem, pressed && styles.tipItemPressed]}
+                      >
+                        <View style={[styles.tipIconWrapNew, { backgroundColor: bg }]}>
+                          <Ionicons name={icon as any} size={18} color={tint} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.tipTitleNew}>{tip.title}</Text>
+                          <Text style={styles.tipDescNew}>{tip.description}</Text>
+                        </View>
+                      </Pressable>
+                      {index !== bloodTips.length - 1 && <View style={styles.tipDivider} />}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </>
         )}
+
+        {homeMode === 'requester' && (
+          <>
+            {/* How to Request Blood */}
+            <View style={styles.requesterTips}>
+              <Text style={styles.sectionTitleNew}>How to Request Blood</Text>
+              <View style={styles.requesterTipRow}>
+                <View style={styles.requesterTipIcon}>
+                  <Ionicons name="create-outline" size={18} color={isDark ? '#FFB3B3' : '#C62828'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.requesterTipTitle}>Fill accurate details</Text>
+                  <Text style={styles.requesterTipText}>Patient name, blood group, district, and contact phone help donors respond quickly.</Text>
+                </View>
+              </View>
+              <View style={styles.tipDivider} />
+              <View style={styles.requesterTipRow}>
+                <View style={styles.requesterTipIcon}>
+                  <Ionicons name="call-outline" size={18} color={isDark ? '#8EC5FF' : '#1976D2'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.requesterTipTitle}>Be reachable</Text>
+                  <Text style={styles.requesterTipText}>Keep your phone available so matched donors can call or WhatsApp you.</Text>
+                </View>
+              </View>
+              <View style={styles.tipDivider} />
+              <View style={styles.requesterTipRow}>
+                <View style={styles.requesterTipIcon}>
+                  <Ionicons name="alert-circle-outline" size={18} color={isDark ? '#FFD59A' : '#F9A825'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.requesterTipTitle}>Use Emergency when urgent</Text>
+                  <Text style={styles.requesterTipText}>Emergency Request is best when you need donors immediately.</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Requester Quick Actions */}
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitleNew}>Quick Actions</Text>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.actionBtnPrimary]} 
+                  onPress={() => router.push('/createRequest')} 
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient colors={[theme.primary, '#E53935']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGradient}>
+                    <View style={[styles.actionIcon, styles.actionIconPrimary]}> 
+                      <IconSymbol name="drop.fill" size={20} color={semanticColors.textInverse} />
+                    </View>
+                    <Text style={[styles.actionLabel, styles.actionLabelPrimary, { color: semanticColors.textInverse }]}>Create Blood Request</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.actionBtnDanger]} 
+                  onPress={() => router.push('/emergencyRequest')} 
+                  activeOpacity={0.9}
+                >
+                  <Animated.View
+                    style={[styles.actionGradient, styles.actionGradientEmergency, {
+                      transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }],
+                      shadowOpacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.4] })
+                    }]}
+                  >
+                    <View style={[styles.actionIcon, styles.actionIconDanger]}> 
+                      <IconSymbol name="bell.fill" size={20} color={semanticColors.textInverse} />
+                    </View>
+                    <Text style={[styles.actionLabel, styles.actionLabelDanger, { color: semanticColors.textInverse }]}>Emergency Request</Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* My Recent Requests Preview */}
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitleNew}>My Recent Requests</Text>
+              {recentRequests.length > 0 ? (
+                recentRequests.map((req: any, index: number) => (
+                  <View key={req._id || index} style={styles.requestPreviewItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.requestPreviewTitle}>{req.patientName || 'Patient'}</Text>
+                      <Text style={styles.requestPreviewMeta}>
+                        {req.bloodType} • {req.location} • {req.status}
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => router.push(`/(home)/request`)}
+                      style={styles.requestPreviewButton}
+                    >
+                      <Text style={styles.requestPreviewButtonText}>View</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="doc.text" size={32} color={semanticColors.textSecondary} />
+                  <Text style={styles.emptyStateText}>No requests yet.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Help/Info Card */}
+            <View style={styles.tipCard}>
+              <View style={[styles.tipIcon, { backgroundColor: `${colors.warning}15` }]}>
+                <IconSymbol name="lightbulb.fill" size={18} color={colors.warning} />
+              </View>
+              <View style={styles.tipContent}>
+                <Text style={styles.tipTitle}>Tip</Text>
+                <Text style={styles.tipDescription}>Use Emergency Request when you need donors immediately.</Text>
+              </View>
+            </View>
+          </>
+        )}
+
 
         {/* Diagnostics section removed per request */}
 
@@ -294,22 +731,7 @@ export default function HomeIndex() {
           </View>
         </View>
         )}
-
-        {/* Blood Donation Tips */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleNew}>Blood Donation Tips</Text>
-          {bloodTips.map((tip, index) => (
-            <View key={index} style={styles.tipCard}>
-              <View style={[styles.tipIcon, { backgroundColor: colors.highlight }]}>
-                <IconSymbol name={tip.icon as any} size={18} color={theme.primary} />
-              </View>
-              <View style={styles.tipContent}>
-                <Text style={styles.tipTitle}>{tip.title}</Text>
-                <Text style={styles.tipDescription}>{tip.description}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+        {/* Donor-only tips moved into DonorHome above (strict separation) */}
 
         {/* Emergency Banner */}
         {/* <View style={styles.emergencyBanner}>

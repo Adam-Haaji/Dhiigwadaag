@@ -3,25 +3,46 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
-import { semanticColors } from '@/constants/colors';
+import { semanticColors, spacing, typography, elevation } from '@/constants/colors';
+import HeaderBanner from '@/components/HeaderBanner';
+import { setHomeModePreference } from '@/service/homeMode';
+import { ChatbotButton, ChatbotPanel } from '@/components/chatbot';
 
 export default function RequestScreen() {
   const { user, setUser } = useAuth();
-  const role = String(user?.user?.role || '').toLowerCase();
+  const [hasRequesterRecord, setHasRequesterRecord] = useState(false);
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const { isDark } = useTheme();
-  // Removed inline donors section/state per request
+
+  // Check if user has requester record
+  const checkRequesterStatus = useCallback(async () => {
+    try {
+      const requesterData = await api.requesterMe();
+      if (requesterData?.exists) {
+        setHasRequesterRecord(true);
+      } else {
+        // No requester record, redirect to role selection
+        router.replace('/role');
+      }
+    } catch (e) {
+      // If check fails, redirect to role selection
+      router.replace('/role');
+    }
+  }, []);
+
+  // Load requests
   const load = useCallback(async () => {
-    if (!(role === 'requester' || role === 'both' || role === 'admin')) return;
+    if (!hasRequesterRecord) return;
     setLoading(true);
     setLoadError(null);
     try {
@@ -71,14 +92,17 @@ export default function RequestScreen() {
     } finally {
       setLoading(false);
     }
-  }, [role]);
+  }, [hasRequesterRecord]);
+  
   useEffect(() => {
-    if (!(role === 'requester' || role === 'both' || role === 'admin')) {
-      router.replace('/role');
+    checkRequesterStatus();
+  }, [checkRequesterStatus]);
+
+  useEffect(() => {
+    if (hasRequesterRecord) {
+      load();
     }
-    load();
-    return () => {};
-  }, [role, load]);
+  }, [hasRequesterRecord, load]);
   const handleCreateRequest = () => {
     router.push('/createRequest');
   };
@@ -89,104 +113,235 @@ export default function RequestScreen() {
 
   // Donors auto-load logic removed; use Emergency Request screen for discovery
 
-  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-  const handleSwitchToDonor = async () => {
-    try {
-      const updated = await api.switchRole('donor');
-      const token = user?.token;
-      await setUser({ token, user: updated });
-      router.replace('/(home)/donor');
-    } catch {}
+  const handleSwitchToDonor = () => {
+    // Navigate directly to donor registration form
+    // The form will check if donor exists and redirect accordingly
+    setHomeModePreference('donor');
+    router.push('/donorRegistration');
   };
 
-  const recentRequests = [
-    {
-      id: 1,
-      bloodType: 'O-',
-      location: 'City Hospital',
-      urgency: 'Critical',
-      timeAgo: '2 hours ago',
-      status: 'Active',
-    },
-    {
-      id: 2,
-      bloodType: 'A+',
-      location: 'General Hospital',
-      urgency: 'Urgent',
-      timeAgo: '5 hours ago',
-      status: 'Fulfilled',
-    },
-    {
-      id: 3,
-      bloodType: 'B-',
-      location: 'Medical Center',
-      urgency: 'Normal',
-      timeAgo: '1 day ago',
-      status: 'Active',
-    },
-  ];
-
-  const getUrgencyColor = (urgency: string) => {
-    switch (urgency) {
-      case 'Critical':
-        return colors.error;
-      case 'Urgent':
-        return colors.warning;
-      default:
-        return colors.secondary;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    return status === 'Active' ? colors.success : colors.textSecondary;
-  };
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: semanticColors.bgAlt },
     scrollView: { flex: 1 },
-    scrollContent: { paddingHorizontal: 20, paddingVertical: 20 },
+    scrollContent: { paddingHorizontal: 0, paddingVertical: 0, paddingBottom: spacing.xxl },
     scrollContentWithTabBar: { paddingBottom: 100 },
     headerGradient: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 24,
-      borderBottomLeftRadius: 20,
-      borderBottomRightRadius: 20,
-      backgroundColor: semanticColors.interactivePrimary,
-      marginBottom: 16,
+      // legacy header container (no longer used)
+      marginBottom: spacing.lg,
+    },
+    headerBannerWrap: {
+      alignSelf: 'center',
+      width: '92%',
+      marginBottom: spacing.lg,
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
-    headerIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-    headerTitle: { color: semanticColors.textInverse, fontSize: 22, fontWeight: '800', letterSpacing: 0.2, marginBottom: 2 },
-    headerSubtitle: { color: semanticColors.textInverse, fontSize: 13, fontWeight: '500' },
-    card: { backgroundColor: semanticColors.bgSurface, borderRadius: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle, padding: 16, marginHorizontal: 0, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-    dashboardCard: { backgroundColor: semanticColors.bgSurface, borderRadius: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle, padding: 16, marginHorizontal: 0, marginBottom: 16 },
-    switchBtn: { alignSelf: 'center', backgroundColor: semanticColors.interactivePrimary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginHorizontal: 0, marginBottom: 12 },
-    switchBtnText: { color: semanticColors.textInverse, fontWeight: '700' },
-    dashboardTitle: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
-    dashboardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-    dashboardLabel: { color: semanticColors.textSecondary },
-    dashboardValue: { fontWeight: '700', color: semanticColors.textPrimary },
-    emergencyCard: { backgroundColor: `${semanticColors.interactiveDanger}15` },
-    cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-    iconBadge: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    headerIconWrap: { 
+      width: 48, 
+      height: 48, 
+      borderRadius: 24, 
+      backgroundColor: 'rgba(255,255,255,0.25)', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      marginRight: spacing.md,
+      ...elevation.none,
+    },
+    headerTitle: { 
+      color: semanticColors.textInverse, 
+      ...typography.h2,
+      fontWeight: '700',
+      letterSpacing: -0.3,
+    },
+    headerSubtitle: { 
+      color: semanticColors.textInverse, 
+      ...typography.bodySmall,
+      fontWeight: '500',
+      marginTop: spacing.xs / 2,
+      opacity: 0.95,
+    },
+    card: { 
+      backgroundColor: semanticColors.bgSurface, 
+      borderRadius: 16, 
+      borderWidth: 1, 
+      borderColor: semanticColors.borderSubtle, 
+      padding: spacing.lg, 
+      marginHorizontal: spacing.lg, 
+      marginBottom: spacing.md, 
+      ...elevation.none,
+    },
+    dashboardCard: { 
+      backgroundColor: semanticColors.bgSurface, 
+      borderRadius: 20, 
+      borderWidth: 1, 
+      borderColor: semanticColors.borderSubtle, 
+      padding: spacing.lg, 
+      marginHorizontal: spacing.lg, 
+      marginBottom: spacing.md,
+      ...elevation.sm,
+    },
+    switchBtn: { 
+      alignSelf: 'center', 
+      backgroundColor: semanticColors.bgSurface, 
+      paddingHorizontal: spacing.lg, 
+      paddingVertical: spacing.md, 
+      borderRadius: 12, 
+      marginHorizontal: spacing.lg, 
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      ...elevation.none,
+    },
+    switchBtnText: { 
+      color: semanticColors.textPrimary, 
+      ...typography.label,
+      fontWeight: '600',
+    },
+    dashboardTitle: { 
+      ...typography.h4,
+      fontWeight: '700', 
+      color: semanticColors.textPrimary, 
+      marginBottom: spacing.md,
+      letterSpacing: -0.2,
+    },
+    dashboardRow: { 
+      flexDirection: 'row', 
+      justifyContent: 'space-between', 
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    dashboardLabel: { 
+      ...typography.label,
+      color: semanticColors.textSecondary,
+      fontWeight: '500',
+    },
+    dashboardValue: { 
+      ...typography.body,
+      fontWeight: '600', 
+      color: semanticColors.textPrimary,
+    },
+    emergencyCard: { 
+      backgroundColor: `${semanticColors.interactiveDanger}12`,
+      borderColor: `${semanticColors.interactiveDanger}30`,
+    },
+    cardRow: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      marginBottom: spacing.md,
+    },
+    iconBadge: { 
+      width: 52, 
+      height: 52, 
+      borderRadius: 16, 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      marginRight: spacing.md,
+      ...elevation.none,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+    },
     cardTextWrap: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary },
-    cardSubtitle: { marginTop: 6, color: semanticColors.textSecondary, fontSize: 13 },
-    primaryBtn: { height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    primaryBtnText: { color: semanticColors.textInverse, fontWeight: '700', fontSize: 14 },
-    sectionCard: { backgroundColor: semanticColors.bgSurface, borderRadius: 16, borderWidth: 1, borderColor: semanticColors.borderSubtle, padding: 16, marginHorizontal: 0, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-    sectionTitle: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 12 },
-    emptyText: { color: semanticColors.textSecondary, fontSize: 13 },
-    listItem: { borderTopWidth: 1, borderTopColor: semanticColors.borderSubtle, paddingVertical: 10 },
-    listItemTitle: { fontSize: 14, fontWeight: '600', color: semanticColors.textPrimary },
-    listItemSub: { fontSize: 12, color: semanticColors.textSecondary, marginTop: 2 },
-    viewBtn: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: semanticColors.interactivePrimaryActive, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-    viewBtnTxt: { color: semanticColors.textInverse, fontSize: 12, fontWeight: '600' },
-    tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    bullet: { width: 8, height: 8, borderRadius: 4, backgroundColor: semanticColors.interactivePrimary, marginTop: 6, marginRight: 12 },
-    tipText: { flex: 1, color: semanticColors.textPrimary, fontSize: 14, lineHeight: 20 },
+    cardTitle: { 
+      ...typography.body,
+      fontWeight: '600', 
+      color: semanticColors.textPrimary,
+      fontSize: 17,
+    },
+    cardSubtitle: { 
+      marginTop: spacing.xs, 
+      color: semanticColors.textSecondary, 
+      ...typography.caption,
+      lineHeight: 18,
+    },
+    primaryBtn: { 
+      height: 50, 
+      borderRadius: 12, 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      ...elevation.none,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+    },
+    primaryBtnText: { 
+      color: semanticColors.textInverse, 
+      ...typography.label,
+      fontWeight: '600',
+    },
+    sectionCard: { 
+      backgroundColor: semanticColors.bgSurface, 
+      borderRadius: 16, 
+      borderWidth: 1, 
+      borderColor: semanticColors.borderSubtle, 
+      padding: spacing.lg, 
+      marginHorizontal: spacing.lg, 
+      marginBottom: spacing.lg,
+      ...elevation.none,
+    },
+    actionsRow: { flexDirection: 'row', gap: spacing.md, marginHorizontal: spacing.lg, marginBottom: spacing.md },
+    actionCard: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: semanticColors.borderSubtle, backgroundColor: semanticColors.bgSurface, paddingVertical: spacing.md, alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+    actionLabel: { ...typography.bodySmall, color: semanticColors.textPrimary, fontWeight: '600' },
+    sectionTitle: { 
+      ...typography.h4,
+      fontWeight: '700', 
+      color: semanticColors.textPrimary, 
+      marginBottom: spacing.md,
+      letterSpacing: -0.2,
+    },
+    emptyText: { 
+      ...typography.bodySmall,
+      color: semanticColors.textSecondary,
+      textAlign: 'center',
+      paddingVertical: spacing.lg,
+    },
+    listItem: { 
+      borderTopWidth: 1, 
+      borderTopColor: semanticColors.borderSubtle, 
+      paddingVertical: spacing.md,
+    },
+    listItemTitle: { 
+      ...typography.bodySmall,
+      fontWeight: '600', 
+      color: semanticColors.textPrimary,
+    },
+    listItemSub: { 
+      ...typography.caption,
+      color: semanticColors.textSecondary, 
+      marginTop: spacing.xs / 2,
+    },
+    viewBtn: { 
+      marginTop: spacing.sm, 
+      alignSelf: 'flex-start', 
+      backgroundColor: semanticColors.interactivePrimaryActive, 
+      paddingHorizontal: spacing.md, 
+      paddingVertical: spacing.sm, 
+      borderRadius: 10,
+      ...elevation.sm,
+    },
+    viewBtnTxt: { 
+      color: semanticColors.textInverse, 
+      ...typography.caption,
+      fontWeight: '600',
+    },
+    tipRow: { 
+      flexDirection: 'row', 
+      alignItems: 'flex-start', 
+      marginBottom: spacing.md,
+    },
+    bullet: { 
+      width: 6, 
+      height: 6, 
+      borderRadius: 3, 
+      backgroundColor: semanticColors.interactivePrimary, 
+      marginTop: 7, 
+      marginRight: spacing.md,
+    },
+    tipText: { 
+      flex: 1, 
+      ...typography.bodySmall,
+      color: semanticColors.textPrimary, 
+      lineHeight: 22,
+    },
   }), [isDark]);
 
   return (
@@ -210,8 +365,8 @@ export default function RequestScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header - match Notification style */}
-        <View style={styles.headerGradient}>
+        {/* Unified top banner */}
+        <HeaderBanner style={styles.headerBannerWrap}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
@@ -223,54 +378,27 @@ export default function RequestScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </HeaderBanner>
 
         {/* Switch Role */}
-        <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchToDonor}>
+        <TouchableOpacity 
+          style={styles.switchBtn} 
+          onPress={handleSwitchToDonor}
+          activeOpacity={0.7}
+        >
           <Text style={styles.switchBtnText}>Switch to Donor</Text>
         </TouchableOpacity>
 
-        {/* Dashboard Stats */}
-        <View style={styles.dashboardCard}>
-          <Text style={styles.dashboardTitle}>My Requests</Text>
-          <View style={styles.dashboardRow}><Text style={styles.dashboardLabel}>Active:</Text><Text style={styles.dashboardValue}>{active.length}</Text></View>
-          <View style={styles.dashboardRow}><Text style={styles.dashboardLabel}>Past:</Text><Text style={styles.dashboardValue}>{past.length}</Text></View>
-          {loading ? <Text style={[styles.dashboardLabel, { marginTop: 8 }]}>Loading…</Text> : null}
-          {loadError ? <Text style={[styles.dashboardLabel, { marginTop: 8, color: semanticColors.interactiveDanger }]}>{loadError}</Text> : null}
-          <TouchableOpacity onPress={load} style={[styles.viewBtn, { marginTop: 10 }]}>
-            <Text style={styles.viewBtnTxt}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Create Request card */}
-        <View style={styles.card}> 
-          <View style={styles.cardRow}>
-            <View style={[styles.iconBadge, { backgroundColor: `${semanticColors.interactivePrimaryActive}15` }]}>
-              <IconSymbol name="doc.text" size={20} color={semanticColors.interactivePrimaryActive} />
-            </View>
-            <View style={styles.cardTextWrap}>
-              <Text style={styles.cardTitle}>Create Request</Text>
-              <Text style={styles.cardSubtitle}>Submit a regular blood request</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: semanticColors.interactivePrimaryActive }]} onPress={handleCreateRequest}>
-            <Text style={styles.primaryBtnText}>Create Request</Text>
+        {/* Side-by-side action cards */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.actionCard} onPress={handleCreateRequest}>
+            <Ionicons name="document-text-outline" size={20} color={semanticColors.textPrimary} />
+            <Text style={styles.actionLabel}>Create Request</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Emergency Request card */}
-        <View style={[styles.card, styles.emergencyCard]}> 
-          <View style={styles.cardRow}>
-            <View style={[styles.iconBadge, { backgroundColor: `${semanticColors.interactiveDanger}15` }]}>
-              <IconSymbol name="phone.fill" size={20} color={semanticColors.interactiveDanger} />
-            </View>
-            <View style={styles.cardTextWrap}>
-              <Text style={styles.cardTitle}>Emergency Request</Text>
-              <Text style={styles.cardSubtitle}>Urgent blood needed immediately</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: semanticColors.interactiveDanger }]} onPress={handleEmergencyRequest}>
-            <Text style={styles.primaryBtnText}>Emergency Request</Text>
+          <TouchableOpacity style={[styles.actionCard, styles.emergencyCard]} onPress={handleEmergencyRequest}>
+            <IconSymbol name="phone.fill" size={18} color={semanticColors.interactiveDanger} />
+            <Text style={styles.actionLabel}>Emergency Request</Text>
           </TouchableOpacity>
         </View>
 
@@ -303,27 +431,15 @@ export default function RequestScreen() {
 
         {/* Available Donors section removed per request; use Emergency screen for donor search */}
 
-        {/* Guidelines */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Request Guidelines</Text>
-          <View style={styles.tipRow}>
-            <View style={styles.bullet} />
-            <Text style={styles.tipText}>Provide accurate patient information</Text>
-          </View>
-          <View style={styles.tipRow}>
-            <View style={styles.bullet} />
-            <Text style={styles.tipText}>Specify blood type and quantity needed</Text>
-          </View>
-          <View style={styles.tipRow}>
-            <View style={styles.bullet} />
-            <Text style={styles.tipText}>Include hospital name and location</Text>
-          </View>
-          <View style={styles.tipRow}>
-            <View style={styles.bullet} />
-            <Text style={styles.tipText}>For emergencies, use the emergency request option</Text>
-          </View>
-        </View>
       </ScrollView>
+
+      {/* Floating chatbot — Requester Assistant */}
+      {hasRequesterRecord && (
+        <>
+          <ChatbotButton onPress={() => setChatOpen(true)} />
+          <ChatbotPanel visible={chatOpen} onClose={() => setChatOpen(false)} />
+        </>
+      )}
     </SafeAreaView>
   );
 }

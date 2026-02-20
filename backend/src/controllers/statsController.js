@@ -14,7 +14,7 @@ export async function getSummary(req, res) {
     const [donorDocs, donorsCount, donorUsers, legacyReqCount, brCount, legacyFulfilled, brFulfilled, brCompleted] = await Promise.all([
       Donor.find({}, { user: 1 }).lean(),
       Donor.countDocuments({}),
-      User.find({ role: { $regex: /^(donor|both)$/i } }, { _id: 1 }).lean(),
+      Donor.find({}, { _id: 1 }).lean(),
       Request.countDocuments({}),
       BloodRequest.countDocuments({}),
       Request.countDocuments({ status: 'Fulfilled' }),

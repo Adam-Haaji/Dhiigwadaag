@@ -62,11 +62,11 @@ const styles = {
     paddingVertical: 16,
     // iOS shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
     // Android elevation
-    elevation: 4,
+    elevation: 0,
     borderWidth: Platform.OS === 'android' ? 0 : 1,
   },
 

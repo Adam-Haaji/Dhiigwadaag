@@ -45,6 +45,17 @@ export const createBloodRequest = async (req, res) => {
       return res.status(400).json({ error: 'Invalid contact phone' });
     }
 
+    // Validate urgencyLevel is only "critical" or "normal"
+    const normalizedUrgency = String(urgentLevel || '').toLowerCase();
+    if (normalizedUrgency !== 'critical' && normalizedUrgency !== 'normal') {
+      return res.status(400).json({ error: 'urgencyLevel must be either "critical" or "normal"' });
+    }
+    
+    // Calculate expiresAt: critical = 24 hours, normal = 48 hours
+    const now = new Date();
+    const expiryHours = normalizedUrgency === 'critical' ? 24 : 48;
+    const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000);
+    
     let doc = await BloodRequest.create({
       patientName: String(patientName).trim(),
       bloodGroup,
@@ -52,11 +63,12 @@ export const createBloodRequest = async (req, res) => {
       units: (Number.isFinite(Number(units)) && Number(units) >= 1) ? Number(units) : 1,
       contactPerson: String(contactPerson).trim(),
       contactPhone: String(contactPhone).trim(),
-      urgentLevel,
+      urgencyLevel: normalizedUrgency,
       reason: String(reason).trim(),
       additionalNote: additionalNote ? String(additionalNote) : '',
       donorId: donorId || undefined,
       requesterId,
+      expiresAt,
     });
     // Broadcast a notification to every user: New Blood Request
     try {
@@ -99,26 +111,24 @@ export const createBloodRequest = async (req, res) => {
     } catch (err) {
       console.error('Auto-match error:', err?.message || err);
     }
-    // Update requesting user's role -> requester/both
+    // DO NOT update user.role - requester record is in requesters collection
+    // Just return user summary without role changes
     let updatedUser = null;
     try {
       const user = await User.findById(requesterId);
       if (user) {
-        const current = String(user.role || '').toLowerCase();
-        user.role = (current === 'donor' || current === 'both') ? 'both' : 'requester';
-        await user.save();
         updatedUser = {
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: user.role, // Keep original role (user)
           donorStatus: user.donorStatus,
           unavailableUntil: user.unavailableUntil,
           menus: computeMenus(user.role),
         };
       }
     } catch (e) {
-      console.error('Failed to update user to requester/both:', e?.message || e);
+      console.error('Failed to get user summary:', e?.message || e);
     }
 
     return res.status(201).json({ request: doc, user: updatedUser });
@@ -241,13 +251,26 @@ export const donorConfirmDonation = async (req, res) => {
     try {
       const notes = [];
       if (doc.requesterId) {
+        // Get requester user for contact info
+        const requesterUser = await User.findById(doc.requesterId).select('name phone').lean().catch(() => null);
         notes.push({
           userId: doc.requesterId,
           title: 'Donation Fulfilled',
           message: `Your blood request has been fulfilled successfully by ${donor.fullName || 'a donor'}.`,
           type: 'request',
           urgent: ['high','critical'].includes(String(doc.urgentLevel)),
-          meta: { source: 'blood-request', requestId: doc._id, status: 'donated' },
+          meta: {
+            type: 'REQUEST_FULFILLED',
+            requestId: doc._id,
+            matchId: doc._id,
+            donorId: donor._id,
+            source: 'blood-request',
+            status: 'donated',
+            donorName: donor.fullName || '',
+            donorPhone: donor.phone || '',
+            donorDistrict: donor.district || '',
+            donorBloodGroup: donor.bloodGroup || '',
+          },
         });
       }
       if (donor.user) {

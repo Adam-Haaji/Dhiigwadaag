@@ -14,6 +14,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 // Removed BlurView dependency to avoid install/bundling/update issues
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
+import { ui } from '@/styles/ui';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -40,8 +41,8 @@ interface FloatingTabBarProps {
 
 export default function FloatingTabBar({
   tabs,
-  containerWidth = screenWidth - 40, // Make it wider to fit larger buttons
-  borderRadius = 30,
+  containerWidth = screenWidth, // full width for flat minimal bar
+  borderRadius = 12,
   bottomMargin,
   badges
 }: FloatingTabBarProps) {
@@ -100,7 +101,7 @@ export default function FloatingTabBar({
     router.push(route as any);
   };
 
-  const tabWidth = (containerWidth - 20) / tabs.length; // Account for container padding (10px on each side)
+  const tabWidth = containerWidth / tabs.length;
   const indicatorStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -117,55 +118,26 @@ export default function FloatingTabBar({
 
   // Dynamic styles based on theme
   const dynamicStyles = {
-    blurContainer: {
-      ...styles.blurContainer,
-      ...Platform.select({
-        ios: {
-          backgroundColor: isDark ? 'rgba(31,41,55,0.85)' : 'rgba(255,255,255,0.85)',
-        },
-        android: {
-          backgroundColor: isDark ? 'rgba(31,41,55,0.95)' : 'rgba(255,255,255,0.95)',
-          elevation: 8,
-        },
-        web: {
-          backgroundColor: isDark ? 'rgba(31,41,55,0.95)' : 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(10px)',
-          boxShadow: isDark
-            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
-            : '0 8px 32px rgba(0, 0, 0, 0.1)',
-        },
-      }),
-    },
-    background: {
-      ...styles.background,
-      backgroundColor: Platform.OS === 'ios' ? 'transparent' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
+    bar: {
+      ...styles.bar,
+      ...ui.tabBar.container,
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-      width: tabWidth, // numeric width for better typing compatibility
+      width: tabWidth,
+      backgroundColor: 'transparent', // make indicator invisible for minimal look
     },
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={[
-        styles.container,
-        {
-          width: containerWidth,
-          marginBottom: bottomMargin ?? (Platform.OS === 'ios' ? 15 : 25) // Increased bottom margin
-        }
-      ]}>
-        <View
-          style={[dynamicStyles.blurContainer, { borderRadius }]}
-        >
-          <View style={dynamicStyles.background} />
+      <View style={[styles.container, { width: containerWidth, marginBottom: bottomMargin ?? 0 }] }>
+        <View style={dynamicStyles.bar}>
           <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
               const badgeCount = badges?.[tab.name] ?? 0;
-
               return (
                 <TouchableOpacity
                   key={tab.name}
@@ -176,7 +148,7 @@ export default function FloatingTabBar({
                   <View style={styles.tabContent}>
                     <IconSymbol
                       name={tab.icon as any}
-                      size={28} // Increased icon size from 24 to 28
+                      size={24}
                       color={isActive ? semanticColors.interactivePrimary : semanticColors.textMuted}
                     />
                     {!!badgeCount && (
@@ -187,8 +159,7 @@ export default function FloatingTabBar({
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: semanticColors.textSecondary },
-                        isActive && { color: semanticColors.interactivePrimary, fontWeight: '600' },
+                        isActive ? styles.tabLabelActive : styles.tabLabelInactive,
                       ]}
                     >
                       {tab.label}
@@ -198,7 +169,7 @@ export default function FloatingTabBar({
               );
             })}
           </View>
-  </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -211,54 +182,51 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    alignItems: 'center', // Center the content
+    alignItems: 'stretch',
   },
   container: {
-    marginHorizontal: 20,
-    alignSelf: 'center',
-    // width and marginBottom handled dynamically via props
+    alignSelf: 'stretch',
   },
-  blurContainer: {
+  bar: {
     overflow: 'hidden',
-    // borderRadius and other styling applied dynamically
-  },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    // Dynamic styling applied in component
   },
   indicator: {
     position: 'absolute',
-    top: 10, // Increased from 8 to 10
-    left: 10, // Increased from 8 to 10
-    bottom: 10, // Increased from 8 to 10
-    borderRadius: 20, // Increased from 17 to 20
-    width: `${(100 / 2) - 2}%`, // Default for 2 tabs, will be overridden by dynamic styles
-    // Dynamic styling applied in component
+    height: 0,
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 80, // Increased height from 60 to 80 for larger buttons
+    height: 64,
     alignItems: 'center',
-    paddingHorizontal: 10, // Increased from 8 to 10
+    paddingHorizontal: 8,
+    backgroundColor: semanticColors.bgSurface,
+    borderTopWidth: 1,
+    borderTopColor: semanticColors.borderSubtle,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12, // Increased from 8 to 12 for better touch target
-    minHeight: 60, // Added minimum height for better touch target
+    paddingVertical: 10,
+    minHeight: 56,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4, // Increased gap from 2 to 4 for better spacing
+    gap: 2,
   },
   tabLabel: {
-    fontSize: 12, // Increased from 11 to 12 for better readability
-    fontWeight: '500',
-    marginTop: 3, // Increased from 2 to 3
+    fontSize: 12,
+    marginTop: 2,
     textAlign: 'center',
-    // Dynamic styling applied in component
+  },
+  tabLabelActive: {
+    color: semanticColors.interactivePrimary,
+    fontWeight: '600',
+  },
+  tabLabelInactive: {
+    color: semanticColors.textSecondary,
+    fontWeight: '500',
   },
   badgeWrap: {
     position: 'absolute',

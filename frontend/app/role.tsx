@@ -8,6 +8,8 @@ import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
 import colorsBase, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
+import HeaderBanner from '@/components/HeaderBanner';
+import { setHomeModePreference } from '@/service/homeMode';
 
 export default function RoleSelect() {
   const { user, setUser } = useAuth();
@@ -118,13 +120,36 @@ export default function RoleSelect() {
     if (loading) return;
     setLoading(newRole);
     try {
-      const updated = await api.switchRole(newRole);
-      const token = user?.token;
-      await setUser({ token, user: updated });
-      router.replace(newRole === 'donor' ? '/(home)/donor' : '/(home)/request');
+      if (newRole === 'donor') {
+        await setHomeModePreference('donor');
+        // Donor flow: directly route to registration (don't call selectRole - it's disabled)
+        // The registration will create the donor record without changing user.role
+        router.replace('/donorRegistration');
+      } else {
+        await setHomeModePreference('requester');
+        // Requester flow: create requester record WITHOUT changing user.role
+        const requesterData = await api.requesterRegister();
+        // Store user profile from response for dashboard auto-loading
+        if (requesterData?.user) {
+          const token = user?.token;
+          await setUser({ 
+            token, 
+            user: { 
+              ...user?.user, 
+              email: requesterData.user.email,
+              phone: requesterData.user.phone,
+              name: requesterData.user.name,
+            } 
+          });
+        }
+        // Immediately redirect to requester dashboard
+        router.replace('/(home)/request');
+      }
     } catch (e) {
-      // If backend role switch fails, still navigate so the user can proceed
-      router.replace(newRole === 'donor' ? '/(home)/donor' : '/(home)/request');
+      console.error('Role selection error:', e);
+      // If error, try to route anyway
+      if (newRole === 'donor') router.replace('/donorRegistration');
+      else router.replace('/(home)/request');
     } finally {
       setLoading(null);
     }
@@ -133,7 +158,7 @@ export default function RoleSelect() {
     <SafeAreaView style={s.container}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={[s.scrollContent, Platform.OS !== 'ios' && s.scrollWithTab]} showsVerticalScrollIndicator={false}>
-        <View style={s.headerHero}>
+        <HeaderBanner style={{ marginBottom: 20 }}>
           <View style={s.headerRow}>
             <View style={s.headerLeft}>
               <View style={s.headerIconWrap}>
@@ -149,7 +174,7 @@ export default function RoleSelect() {
             <View style={s.heroCircle}><IconSymbol name="heart.fill" size={28} color="#fff" /></View>
             <View style={s.heroCircleAlt}><IconSymbol name="person.2.fill" size={28} color="#fff" /></View>
           </View>
-        </View>
+        </HeaderBanner>
 
         <Text style={s.sectionTitle}>Choose your role to begin</Text>
         <View style={s.cardGrid}>
@@ -157,7 +182,7 @@ export default function RoleSelect() {
             <Image source={require('../assets/image/onboarding1.png')} resizeMode="cover" style={s.cardImage} />
             <View style={s.cardIconWrap}><IconSymbol name="hand.thumbsup.fill" size={28} color="#fff" /></View>
             <Text style={s.cardTitle}>Become Donor</Text>
-            <Text style={s.cardText}>Switch now. Registration appears inside Donor tab only if needed.</Text>
+            <Text style={s.cardText}>Choose Donor to register and start helping.</Text>
             <TouchableOpacity style={[s.ctaBtn, s.donor]} onPress={() => doSwitch('donor')} disabled={!!loading}>
               {loading === 'donor' ? <ActivityIndicator color="#fff" /> : <IconSymbol name="arrow.right.circle.fill" size={18} color="#fff" />}
               <Text style={s.ctaTxt}>Switch to Donor</Text>
@@ -173,7 +198,7 @@ export default function RoleSelect() {
             <Image source={require('../assets/image/onboarding2.png')} resizeMode="cover" style={s.cardImage} />
             <View style={[s.cardIconWrap, { backgroundColor: colorsBase.palette.info }]}><IconSymbol name="bell.fill" size={28} color="#fff" /></View>
             <Text style={s.cardTitle}>Become Requester</Text>
-            <Text style={s.cardText}>Switch now. Request forms live inside the Request tab.</Text>
+            <Text style={s.cardText}>Choose Requester to create and manage requests.</Text>
             <TouchableOpacity style={[s.ctaBtn, s.request]} onPress={() => doSwitch('requester')} disabled={!!loading}>
               {loading === 'requester' ? <ActivityIndicator color="#fff" /> : <IconSymbol name="arrow.right.circle.fill" size={18} color="#fff" />}
               <Text style={s.ctaTxt}>Switch to Requester</Text>
@@ -190,7 +215,7 @@ export default function RoleSelect() {
           <Text style={sinfo.infoTitle}>Tips</Text>
           <View style={sinfo.row}><IconSymbol name="checkmark.seal.fill" size={18} color={colorsBase.palette.success} /><Text style={sinfo.infoText}>Donor eligibility: Age 18–65, weight ≥50kg, HB threshold</Text></View>
           <View style={sinfo.row}><IconSymbol name="lock.fill" size={18} color={semanticColors.textSecondary} /><Text style={sinfo.infoText}>Your data is protected and used only for matching</Text></View>
-          <View style={sinfo.row}><IconSymbol name="sparkles" size={18} color={colorsBase.palette.warning} /><Text style={sinfo.infoText}>You can switch roles anytime from the dashboards</Text></View>
+          <View style={sinfo.row}><IconSymbol name="lock.fill" size={18} color={semanticColors.textSecondary} /><Text style={sinfo.infoText}>Role selection is one-time. Contact support to change.</Text></View>
         </View>
       </ScrollView>
     </SafeAreaView>

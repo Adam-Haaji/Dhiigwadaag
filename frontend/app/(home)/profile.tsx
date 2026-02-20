@@ -9,11 +9,13 @@ import useAuthHook from "../../hooks/useAuth";
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
+import HeaderBanner from '@/components/HeaderBanner';
 
 
 export default function ProfileScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [userProfile, setUserProfile] = useState<any>({});
+  const [donorProfile, setDonorProfile] = useState<any>(null);
   const { logout } = useAuthHook();
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
   const { isDark } = useTheme();
@@ -33,13 +35,9 @@ export default function ProfileScreen() {
     scrollContentWithTabBar: {
       paddingBottom: 100,
     },
-    headerGradient: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 24,
-      borderBottomLeftRadius: 20,
-      borderBottomRightRadius: 20,
-      backgroundColor: semanticColors.interactivePrimary,
+    headerBannerWrap: {
+      alignSelf: 'center',
+      width: '92%',
       marginBottom: 16,
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -61,8 +59,8 @@ export default function ProfileScreen() {
       padding: 24,
       alignItems: 'center',
       marginBottom: 20,
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
     },
     avatarContainer: {
       position: 'relative',
@@ -133,8 +131,8 @@ export default function ProfileScreen() {
       borderRadius: 16,
       padding: 20,
       marginBottom: 20,
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
     },
     availabilityHeader: {
       flexDirection: 'row',
@@ -165,8 +163,8 @@ export default function ProfileScreen() {
       borderRadius: 16,
       padding: 20,
       marginBottom: 20,
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
     },
     sectionTitle: {
       fontSize: 20,
@@ -226,8 +224,8 @@ export default function ProfileScreen() {
       justifyContent: 'center',
       paddingVertical: 16,
       borderRadius: 12,
-      boxShadow: '0px 4px 12px rgba(231, 76, 60, 0.3)',
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
     },
     primaryButtonText: {
       color: semanticColors.textInverse,
@@ -273,9 +271,28 @@ export default function ProfileScreen() {
   useEffect(() => {
     (async () => {
       try {
-  const me = await apiClient.me();
+        const me = await apiClient.me();
         setUserProfile(me || {});
         if (typeof me?.availability === 'boolean') setIsAvailable(!!me.availability);
+        
+        // Load donor profile if user is a donor
+        try {
+          const donorData = await apiClient.donorMe();
+          if (donorData?.exists && donorData?.donor) {
+            setDonorProfile(donorData.donor);
+            // Merge donor data with user profile for display
+            setUserProfile((prev: any) => ({
+              ...prev,
+              // Override with donor data if available
+              bloodType: donorData.donor.bloodGroup || prev.bloodType,
+              phone: donorData.donor.phone || prev.phone,
+              email: donorData.donor.email || prev.email,
+              location: donorData.donor.district || prev.location,
+            }));
+          }
+        } catch (e) {
+          // Not a donor or error loading donor data - use user data only
+        }
       } catch {}
     })();
   }, []);
@@ -314,8 +331,8 @@ export default function ProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header - match Notification header border style */}
-        <View style={styles.headerGradient}>
+        {/* Header - unified banner */}
+        <HeaderBanner style={styles.headerBannerWrap}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
@@ -327,7 +344,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </HeaderBanner>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
@@ -382,12 +399,12 @@ export default function ProfileScreen() {
           </View>
           
           <Text style={styles.name}>{userProfile.name}</Text>
-          <Text style={styles.email}>{userProfile.email}</Text>
+          <Text style={styles.email}>{userProfile.email || donorProfile?.email || ''}</Text>
           
           <View style={styles.bloodTypeContainer}>
             <View style={styles.bloodTypeBadge}>
               <IconSymbol name="drop.fill" size={20} color={semanticColors.textInverse} />
-              <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
+              <Text style={styles.bloodTypeText}>{userProfile.bloodType || donorProfile?.bloodGroup || '—'}</Text>
             </View>
           </View>
         </View>
@@ -433,7 +450,7 @@ export default function ProfileScreen() {
             <IconSymbol name="envelope.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{userProfile.email}</Text>
+              <Text style={styles.infoValue}>{userProfile.email || donorProfile?.email || '—'}</Text>
             </View>
           </View>
 
@@ -441,7 +458,7 @@ export default function ProfileScreen() {
             <IconSymbol name="phone.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Phone</Text>
-              <Text style={styles.infoValue}>{userProfile.phone}</Text>
+              <Text style={styles.infoValue}>{userProfile.phone || donorProfile?.phone || '—'}</Text>
             </View>
           </View>
 
@@ -449,7 +466,7 @@ export default function ProfileScreen() {
             <IconSymbol name="drop.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Blood Type</Text>
-              <Text style={styles.infoValue}>{userProfile.bloodType}</Text>
+              <Text style={styles.infoValue}>{userProfile.bloodType || donorProfile?.bloodGroup || '—'}</Text>
             </View>
           </View>
 
@@ -457,9 +474,22 @@ export default function ProfileScreen() {
             <IconSymbol name="location.fill" size={20} color={semanticColors.interactivePrimary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{userProfile.location}</Text>
+              <Text style={styles.infoValue}>{userProfile.location || donorProfile?.district || '—'}</Text>
             </View>
           </View>
+          
+          {/* Show donor availability status if user is a donor */}
+          {donorProfile && (
+            <View style={styles.infoRow}>
+              <IconSymbol name="heart.fill" size={20} color={semanticColors.interactivePrimary} />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Donor Status</Text>
+                <Text style={[styles.infoValue, { color: donorProfile.availabilityStatus === 'available' ? semanticColors.interactivePrimary : semanticColors.interactiveDanger }]}>
+                  {donorProfile.availabilityStatus === 'available' ? 'Available' : 'Unavailable'}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Donation History */}

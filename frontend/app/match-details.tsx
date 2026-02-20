@@ -23,6 +23,22 @@ export default function MatchDetails() {
   const patient = noti?.data || {};
   const isEmergency = String(noti?.type || '').toLowerCase() === 'emergency';
 
+  const donorIdFromNoti = String(
+    noti?.donorId ||
+    noti?.meta?.donorId ||
+    patient?.donorId ||
+    patient?.meta?.donorId ||
+    ''
+  );
+
+  const matchIdFromNoti = String(
+    noti?.matchId ||
+    noti?.meta?.matchId ||
+    patient?.matchId ||
+    patient?.meta?.matchId ||
+    ''
+  );
+
   const requestId = String(
     noti?.requestId ||
     noti?.meta?.requestId ||
@@ -61,20 +77,70 @@ export default function MatchDetails() {
   };
 
   const fetchMatchedDonor = async () => {
-    if (!requestId) {
-      setDonorError('Missing request id from notification.');
-      return;
-    }
+    // Priority resolution for REQUEST_FULFILLED:
+    // 1) donorId → fetch donor
+    // 2) matchId  → fetch match → extract donorId → fetch donor
+    // 3) requestId → fetch request → extract fulfilledBy/matched donor
+    // 4) requestId → fallback /matched-donor endpoint
     setDonorLoading(true);
     setDonorError(null);
     setDonorInfo(null);
     try {
-      // Use the minimal endpoint designed for notification flows
-      const resp: any = await api.get(`/api/requests/${encodeURIComponent(requestId)}/matched-donor`);
-      const donor = resp?.donor || resp?.data?.donor || resp;
-      setDonorInfo(donor);
+      const donorId = donorIdFromNoti && donorIdFromNoti !== 'undefined' ? donorIdFromNoti : '';
+      const matchId = matchIdFromNoti && matchIdFromNoti !== 'undefined' ? matchIdFromNoti : '';
+
+      // STEP 1: donorId
+      if (donorId) {
+        const d: any = await api.getDonorProfile(donorId).catch(() => null) || await api.get(`/api/donors/${encodeURIComponent(donorId)}`).catch(() => null);
+        if (d && (d.phone || d.fullName || d.name)) {
+          setDonorInfo(d);
+          return;
+        }
+      }
+
+      // STEP 2: matchId
+      if (matchId) {
+        const mv: any = await api.getRequesterMatchView(matchId).catch(() => null);
+        const extracted = mv?.donorId || mv?.donor?._id || mv?.donor?.id || mv?.match?.donorId || mv?.data?.donorId || mv?.data?.donor?._id;
+        if (extracted) {
+          const d: any = await api.getDonorProfile(String(extracted)).catch(() => null) || await api.get(`/api/donors/${encodeURIComponent(String(extracted))}`).catch(() => null);
+          if (d && (d.phone || d.fullName || d.name)) {
+            setDonorInfo(d);
+            return;
+          }
+        }
+      }
+
+      // STEP 3: requestId → fetch request and inspect fulfilled donor
+      if (requestId) {
+        const req: any = await api.getRequest(requestId).catch(() => null);
+        const donorFromReq = req?.fulfilledBy || req?.donor || req?.donorId || req?.matchedDonorId;
+        if (donorFromReq && typeof donorFromReq === 'object') {
+          setDonorInfo(donorFromReq);
+          return;
+        }
+        if (donorFromReq) {
+          const d: any = await api.getDonorProfile(String(donorFromReq)).catch(() => null) || await api.get(`/api/donors/${encodeURIComponent(String(donorFromReq))}`).catch(() => null);
+          if (d && (d.phone || d.fullName || d.name)) {
+            setDonorInfo(d);
+            return;
+          }
+        }
+      }
+
+      // STEP 4: requestId → fallback /matched-donor endpoint
+      if (requestId) {
+        const resp: any = await api.get(`/api/requests/${encodeURIComponent(requestId)}/matched-donor`);
+        const donor = resp?.donor || resp?.data?.donor || resp;
+        if (donor && (donor.phone || donor.fullName || donor.name)) {
+          setDonorInfo(donor);
+          return;
+        }
+      }
+
+      setDonorError('Donor details not available yet. Please check again.');
     } catch (e: any) {
-      setDonorError(e?.message || 'Failed to load donor info');
+      setDonorError('Donor details not available yet. Please check again.');
     } finally {
       setDonorLoading(false);
     }
@@ -156,7 +222,7 @@ export default function MatchDetails() {
         </TouchableOpacity>
       ) : (
         <TouchableOpacity style={[styles.btn, styles.btnAccent]} onPress={onContactDonor}>
-          <Text style={styles.btnTxt}>Contact Donor</Text>
+          <Text style={styles.btnTxt}>View Donor</Text>
         </TouchableOpacity>
       )}
 

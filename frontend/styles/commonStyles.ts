@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { moderateScale, responsiveFont, layout } from '../constants/theme';
-import colorsBase, { semanticColors, gradients } from '@/constants/colors';
+import colorsBase, { semanticColors, gradients, spacing, typography, elevation } from '@/constants/colors';
 
 // Theme-aware shared colors for screens using common styles
 export const colors = {
@@ -23,32 +23,34 @@ export const colors = {
 export const buttonStyles = StyleSheet.create({
   primaryButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 8,
+    marginVertical: spacing.sm,
+    ...elevation.none,
   },
   secondaryButton: {
     backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 8,
+    marginVertical: spacing.sm,
+    ...elevation.none,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
   },
   secondaryButtonText: {
     color: colors.text,
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
   },
 });
@@ -74,25 +76,21 @@ export const commonStyles = StyleSheet.create({
     paddingHorizontal: moderateScale(20),
   },
   title: {
-    fontSize: responsiveFont(28),
-    fontWeight: '700',
+    ...typography.h1,
     textAlign: 'center',
     color: colors.text,
-    marginBottom: moderateScale(16),
+    marginBottom: spacing.md,
   },
   subtitle: {
-    fontSize: responsiveFont(18),
-    fontWeight: '600',
+    ...typography.h3,
     textAlign: 'center',
     color: colors.text,
-    marginBottom: moderateScale(12),
+    marginBottom: spacing.md,
   },
   text: {
-    fontSize: responsiveFont(16),
-    fontWeight: '400',
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: moderateScale(8),
-    lineHeight: responsiveFont(24),
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   section: {
@@ -103,15 +101,11 @@ export const commonStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: moderateScale(16),
-    padding: moderateScale(20),
-    marginVertical: moderateScale(8),
+    borderRadius: 12,
+    padding: spacing.lg,
+    marginVertical: spacing.sm,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    ...elevation.none,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -119,16 +113,17 @@ export const commonStyles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: moderateScale(12),
-    paddingVertical: moderateScale(16),
-    paddingHorizontal: moderateScale(16),
-    fontSize: responsiveFont(16),
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    ...typography.body,
     color: colors.text,
-    marginVertical: moderateScale(8),
+    marginVertical: spacing.sm,
+    ...elevation.none,
   },
   inputFocused: {
     borderColor: colors.primary,
-    borderWidth: 2,
+    borderWidth: 1,
   },
   icon: {
     width: 60,

@@ -21,6 +21,8 @@ type Noti = {
   data?: any;
   requestId?: string;
   donorId?: string;
+  matchId?: string;
+  metaType?: string;
 };
 
 function NotificationsScreen() {
@@ -51,21 +53,24 @@ function NotificationsScreen() {
         const res = await api.myNotifications();
         const list: any[] = Array.isArray(res?.notifications) ? res.notifications as any[] : (Array.isArray(res) ? (res as any[]) : []);
         const normalized: Noti[] = list.map((n: any) => {
-          const requestId = n.requestId || n.meta?.requestId || n.data?.requestId || n.data?.meta?.requestId || n.request?._id || n.request?.id || n.request || undefined;
+          const requestId = n.requestId || n.meta?.requestId || n.data?.requestId || n.data?.meta?.requestId || n.request?._id || n.request?.id || (typeof n.request === 'string' ? n.request : undefined) || undefined;
           const donorId = n.donorId || n.meta?.donorId || n.data?.donorId || n.data?.meta?.donorId || n.donor?._id || n.donor?.id || n.donor || undefined;
+          const matchId = n.matchId || n.meta?.matchId || n.data?.matchId || requestId;
+          const metaType = n.meta?.type || n.data?.type || undefined;
           const type = (n.type || (n.category ?? '') || '').toString().toLowerCase();
           return {
             id: n.id || n._id || String(Math.random()),
-            // Backend uses: request/emergency/system. Keep these so filtering/navigation can work.
             type: (type === 'donor' || type === 'request' || type === 'match' || type === 'system' || type === 'emergency')
               ? (type as Noti['type'])
               : 'system',
             title: n.title || 'Notification',
             message: n.body || n.message || '',
             timestamp: n.timestamp || n.createdAt || new Date().toISOString(),
-            data: n.data || { requestId, donorId },
+            data: n.data || { requestId, donorId, matchId, type: metaType },
             requestId,
             donorId,
+            matchId,
+            metaType,
           } as Noti;
         });
         // Role visibility:
@@ -87,32 +92,96 @@ function NotificationsScreen() {
     return () => { alive = false; };
   }, [user]);
 
-  const openDetails = (n: Noti) => {
+  const openDetails = async (n: Noti) => {
     const role = user?.user?.role?.toLowerCase();
-
     const title = String(n.title || '').toLowerCase();
     const msg = String(n.message || '').toLowerCase();
+    const isDonorMatched = (title.includes('donor matched') || title.includes('you are matched') || msg.includes('matched to donate') || msg.includes('you are matched'));
+    const isDonorAccepted = (title.includes('donor accepted') || msg.includes('donor has accepted'));
     const looksDonorTarget = title.includes('you are matched') || msg.includes('matched to donate') || msg.includes('you are matched');
+    const isMatchType = (n.type || '').toString().toLowerCase() === 'match';
+    const rawId = n.requestId ?? n.matchId ?? (n.data as any)?.requestId ?? (n.data as any)?.matchId;
+    const requestId = rawId != null ? String(rawId) : null;
+    const donorIdRaw = n.donorId ?? (n.data as any)?.donorId;
+    const donorIdParam = donorIdRaw != null ? String(donorIdRaw) : undefined;
+    const matchIdRaw = n.matchId ?? (n.data as any)?.matchId;
+    const matchIdParam = matchIdRaw != null ? String(matchIdRaw) : undefined;
+    const isRequestFulfilled = n.metaType === 'REQUEST_FULFILLED' || ((n.data as any)?.type === 'REQUEST_FULFILLED') || ((n.data as any)?.meta?.type === 'REQUEST_FULFILLED');
+    const looksRequestFulfilledTitle = title === 'request fulfilled' || title === 'donation fulfilled';
 
-    // Donor-style notifications should land on the donor workflow screen even when role is `both`.
-    const isDonorNoti = looksDonorTarget || role === 'donor';
-    if (isDonorNoti || (role === 'both' || role === 'admin')) {
-      if (!n.requestId) {
-        Alert.alert('Missing request', 'This notification has no request id.');
+    // Requester: REQUEST_FULFILLED only → open Donor Details screen.
+    // (Strict: do NOT trigger for other fulfilled/wording-based notifications.)
+    if (isRequestFulfilled) {
+      if (requestId || donorIdParam || matchIdParam) {
+        router.push({
+          pathname: '/match-details',
+          params: {
+            payload: JSON.stringify({
+              type: 'REQUEST_FULFILLED',
+              title: n.title,
+              message: n.message,
+              requestId: requestId || undefined,
+              donorId: donorIdParam,
+              matchId: matchIdParam,
+            }),
+          },
+        });
         return;
       }
-      router.push({ pathname: '/matchedRequestDetail', params: { id: String(n.requestId), mode: 'donor' } });
+      Alert.alert('Details unavailable', 'Donor details not available yet. Please check again.');
+      if (__DEV__) console.warn('[Notifications] REQUEST_FULFILLED missing donorId/matchId/requestId', n);
       return;
     }
 
-    // Requesters keep using the notification detail screen.
-    const params: Record<string, string> = { payload: JSON.stringify(n) };
-    if (role === 'requester') params.mode = 'requester';
-    router.push({ pathname: '/match-details', params });
+    // Backward compatibility for old stored notifications:
+    // If title looks like a fulfilled notification but meta.type is missing, verify the request belongs to me,
+    // then treat it as REQUEST_FULFILLED.
+    if (!isRequestFulfilled && looksRequestFulfilledTitle && requestId) {
+      try {
+        const req: any = await api.getRequest(String(requestId));
+        const requesterId = (typeof req?.requesterId === 'object' ? (req?.requesterId?._id || req?.requesterId?.id) : req?.requesterId) || null;
+        const me = user?.user?.id;
+        if (requesterId && me && String(requesterId) === String(me)) {
+          router.push({
+            pathname: '/match-details',
+            params: {
+              payload: JSON.stringify({
+                type: 'REQUEST_FULFILLED',
+                title: n.title,
+                message: n.message,
+                requestId: String(requestId),
+              }),
+            },
+          });
+          return;
+        }
+      } catch {}
+    }
+
+    // Donor: "You are matched" (or match category) → same screen as "View Matched Requests" (Accept & Donate / Decline).
+    // Do NOT depend on user.role (role may remain 'user' under collection separation).
+    if ((looksDonorTarget || isMatchType) && !isRequestFulfilled) {
+      if (requestId) {
+        router.push({ pathname: '/matchedRequestDetail', params: { id: requestId, mode: 'donor' } });
+        return;
+      }
+      Alert.alert('Match details not found', 'This notification has no link to the request. Open Matched Requests from the dashboard.');
+      if (__DEV__) console.warn('[Notifications] You are matched notification missing requestId/matchId', n);
+      return;
+    }
+
+    // "Donor Matched" / "Donor Accepted" (requester): message only.
+    if (isDonorMatched || isDonorAccepted) {
+      router.push({ pathname: '/notification-message', params: { payload: JSON.stringify({ title: n.title, message: n.message }) } });
+      return;
+    }
+
+    // All other: message-only view.
+    router.push({ pathname: '/notification-message', params: { payload: JSON.stringify({ title: n.title, message: n.message }) } });
   };
 
   const renderItem = ({ item }: { item: Noti }) => (
-    <TouchableOpacity style={s.card} onPress={() => openDetails(item)}>
+    <TouchableOpacity style={s.card} onPress={() => { void openDetails(item); }}>
       <View style={s.rowBetween}>
         <Text style={s.title}>{item.title}</Text>
         <View style={[s.roleTag, item.type === 'donor' ? s.tagDonor : item.type === 'request' ? s.tagReq : s.tagMatch]}>

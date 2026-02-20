@@ -1,42 +1,48 @@
-// Simple district adjacency + expansion order helper
-// Note: This map is a best-effort approximation for Mogadishu districts present in the schema.
-// It ensures deterministic expansion: same district → nearest neighbors → remaining.
+// District priority map for location-based matching
+// This map defines the priority order for searching donors: same district → nearest districts → remaining
+// Based on realistic proximity logic inside Mogadishu
 
 import { LOCATIONS as DISTRICTS } from './locations.js';
 
-const neighbors = {
-  // Priority 1 – Same District is implicit; below are Priority 2 nearby districts
-  'Hodan': ['Howlwadaag', 'Wadajir', 'Waaberi'],
-  'Wadajir': ['Hodan', 'Dharkenley'],
-  'Dayniile': ['Hilwaa', 'Kahda'],
-  'Xamar Jajab': ['Shangani', 'Warta Nabadda'],
-  'Kahda': ['Dayniile', 'Hilwaa'],
-  // Add reasonable links for remaining districts to avoid dead-ends
-  'Abdiaziiz': ['Xamar Jajab', 'Xamar Weyne'],
-  'Bondheere': ['Xamar Weyne', 'Waaberi'],
-  'Xamar Weyne': ['Abdiaziiz', 'Shangani'],
-  'Shangani': ['Xamar Weyne', 'Xamar Jajab'],
-  'Shibis': ['Yaaqshid', 'Kaaran'],
-  'Yaaqshid': ['Shibis', 'Warta Nabadda'],
-  'Warta Nabadda': ['Howlwadaag', 'Yaaqshid'],
-  'Howlwadaag': ['Hodan', 'Warta Nabadda'],
-  'Kaaran': ['Shibis', 'Yaaqshid'],
-  'Waaberi': ['Hodan', 'Bondheere'],
-  'Dharkenley': ['Wadajir', 'Dayniile'],
-  'Hilwaa': ['Dayniile', 'Kahda'],
+const DISTRICT_PRIORITY = {
+  "Abdiaziiz": ["Shangani", "Shibis", "Xamar Weyne", "Hodan"],
+  "Bondheere": ["Shangani", "Xamar Weyne", "Hodan", "Howlwadaag"],
+  "Dayniile": ["Hilwaa", "Yaaqshid", "Kahda", "Wadajir"],
+  "Dharkenley": ["Hodan", "Howlwadaag", "Wadajir", "Waaberi"],
+  "Xamar Jajab": ["Xamar Weyne", "Shangani", "Waaberi", "Hodan"],
+  "Xamar Weyne": ["Shangani", "Xamar Jajab", "Bondheere", "Abdiaziiz"],
+  "Hodan": ["Howlwadaag", "Waaberi", "Wadajir", "Dharkenley"],
+  "Howlwadaag": ["Hodan", "Waaberi", "Wadajir", "Bondheere"],
+  "Kaaran": ["Yaaqshid", "Shibis", "Hilwaa", "Abdiaziiz"],
+  "Shangani": ["Xamar Weyne", "Bondheere", "Shibis", "Abdiaziiz"],
+  "Shibis": ["Kaaran", "Abdiaziiz", "Shangani", "Yaaqshid"],
+  "Wadajir": ["Hodan", "Howlwadaag", "Dharkenley", "Kahda"],
+  "Waaberi": ["Hodan", "Howlwadaag", "Xamar Jajab", "Dharkenley"],
+  "Warta Nabadda": ["Hodan", "Howlwadaag", "Waaberi", "Dharkenley"],
+  "Yaaqshid": ["Kaaran", "Hilwaa", "Dayniile", "Shibis"],
+  "Hilwaa": ["Yaaqshid", "Dayniile", "Kaaran", "Kahda"],
+  "Kahda": ["Wadajir", "Dayniile", "Hilwaa"]
 };
 
-export function getDistrictExpansionOrder(start) {
+export function getDistrictExpansionOrder(start, urgencyLevel = 'normal') {
   const startNorm = String(start || '').trim();
   const unique = new Set();
   const order = [];
   const push = (d) => { if (DISTRICTS.includes(d) && !unique.has(d)) { unique.add(d); order.push(d); } };
+  
+  // Step 1: Same district first
   if (startNorm) push(startNorm);
-  // First wave: direct neighbors
-  (neighbors[startNorm] || []).forEach(push);
-  // Second wave: neighbors-of-neighbors
-  (neighbors[startNorm] || []).forEach(n => (neighbors[n] || []).forEach(push));
-  // Finally: remaining districts
-  DISTRICTS.forEach(push);
+  
+  // Step 2: Nearest districts (priority order from DISTRICT_PRIORITY map)
+  const priorityList = DISTRICT_PRIORITY[startNorm] || [];
+  priorityList.forEach(push);
+  
+  // Step 3: Emergency fallback - if critical and no donor found, expand to all remaining districts
+  // For normal requests, we stop after priority list
+  if (String(urgencyLevel).toLowerCase() === 'critical') {
+    // Add all remaining districts in a stable order
+    DISTRICTS.forEach(push);
+  }
+  
   return order;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuth from '@/hooks/useAuth';
 import { colors } from '@/styles/commonStyles';
@@ -53,8 +53,26 @@ export default function DonorDashboard() {
         return;
       }
     } catch {}
-    // Fallback to notifications auto-open flow
     router.push({ pathname: '/(home)/notification', params: { openLatestRequest: '1' } });
+  }
+
+  /** Navigate to Matched Request Details when donor taps "You are matched" (same as View Matched Requests). */
+  function onNotificationPress(n: any) {
+    const title = String(n?.title || '').toLowerCase();
+    const msg = String(n?.message || n?.body || '').toLowerCase();
+    const isMatched = title.includes('you are matched') || msg.includes('you are matched') || msg.includes('matched to donate')
+      || (n?.type || '').toString().toLowerCase() === 'match';
+    const requestId = n?.requestId ?? n?.meta?.requestId ?? n?.meta?.matchId ?? n?.data?.requestId ?? n?.data?.matchId;
+    const id = requestId != null ? String(requestId) : null;
+    if (isMatched && id) {
+      router.push({ pathname: '/matchedRequestDetail', params: { id, mode: 'donor' } });
+      return;
+    }
+    if (isMatched && !id) {
+      Alert.alert('Match details not found', 'This notification has no link to the request. Open "View Matched Requests" from the dashboard.');
+      return;
+    }
+    router.push({ pathname: '/(home)/notification' });
   }
 
   async function loadNotes() {
@@ -69,16 +87,18 @@ export default function DonorDashboard() {
   }
 
   useEffect(() => {
+    // Block access until donor registration is complete
+    if (role === 'donor' && donorStatus === 'not_a_donor') {
+      router.replace('/donorRegistration');
+      return;
+    }
     (async () => {
       await loadMatches(false);
       await loadNotes();
     })();
-    // quick refresh poll for matches
-    const timer = setInterval(() => {
-      loadMatches(true);
-    }, 5000);
+    const timer = setInterval(() => { loadMatches(true); }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [role, donorStatus]);
 
   const statusText = useMemo(() => {
     if (donorStatus === 'unavailable' && unavailableUntil) return `Unavailable until ${unavailableUntil.toLocaleDateString()}`;
@@ -98,7 +118,7 @@ export default function DonorDashboard() {
     topActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: 8 },
     switchPill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: semanticColors.bgSurface, borderWidth: 1, borderColor: semanticColors.borderSubtle },
     switchPillText: { color: semanticColors.textPrimary, fontWeight: '700' },
-    card: { alignSelf: 'center', width: '92%', backgroundColor: semanticColors.bgSurface, padding: 16, borderRadius: 16, marginTop: 12, shadowColor: 'rgba(0,0,0,0.15)', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 3, borderWidth: 1, borderColor: semanticColors.borderSubtle },
+    card: { alignSelf: 'center', width: '92%', backgroundColor: semanticColors.bgSurface, padding: 16, borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: semanticColors.borderSubtle },
     cardTitle: { fontSize: 16, fontWeight: '700', color: semanticColors.textPrimary, marginBottom: 8 },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     badge: { backgroundColor: semanticColors.bgAlt, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: semanticColors.borderSubtle },
@@ -157,22 +177,7 @@ export default function DonorDashboard() {
           ]}
         />
 
-        {/* Role switch action */}
-        <View style={s.topActionsRow}>
-          <Pressable
-            onPress={async () => {
-              try {
-                const updated = await api.switchRole('requester');
-                const token = user?.token;
-                await setUser({ token, user: updated });
-                router.replace('/requesterDashboard');
-              } catch {}
-            }}
-            style={({ pressed }) => [s.switchPill, pressed && { transform: [{ scale: 0.98 }] }]}
-          >
-            <Text style={s.switchPillText}>⇄ Switch to Request</Text>
-          </Pressable>
-        </View>
+        {/* Role switching removed per policy */}
 
         {/* Status Card */}
         <View style={s.card}>
@@ -198,14 +203,14 @@ export default function DonorDashboard() {
           )) : <Text style={s.empty}>No matches yet.</Text>}
         </View>
 
-        {/* Notifications */}
+        {/* Notifications - tap "You are matched" opens same screen as View Matched Requests */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Notifications</Text>
           {notes?.length ? notes.slice(0, 5).map((n: any, i: number) => (
-            <View style={s.listItem} key={String(n._id || i)}>
+            <Pressable style={s.listItem} key={String(n._id || i)} onPress={() => onNotificationPress(n)}>
               <Text style={s.itemTitle}>{n.title || n.message || 'Notification'}</Text>
               <Text style={s.itemMeta}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</Text>
-            </View>
+            </Pressable>
           )) : <Text style={s.empty}>No notifications.</Text>}
         </View>
 

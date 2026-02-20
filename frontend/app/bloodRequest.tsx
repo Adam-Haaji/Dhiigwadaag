@@ -259,6 +259,6 @@ const styles = StyleSheet.create({
   chipTextActive: { color: semanticColors.textInverse },
   textArea: { height: 100, paddingTop: 16 },
   footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: semanticColors.borderSubtle },
-  submitButton: { backgroundColor: semanticColors.interactivePrimary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, shadowColor: '#E74C3C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
+  submitButton: { backgroundColor: semanticColors.interactivePrimary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12 },
   submitButtonText: { color: semanticColors.textInverse, fontSize: 18, fontWeight: '600', marginLeft: 8 },
 });

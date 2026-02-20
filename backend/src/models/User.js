@@ -9,8 +9,9 @@ const userSchema = new mongoose.Schema({
   location: { type: String },
   phone: { type: String, match: [/^\d{9,12}$/, 'Enter a valid phone number'] },
 
-  // Role system
-  role: { type: String, enum: ['none', 'donor', 'requester', 'both', 'admin'], default: 'none', required: true },
+  // Role system - users collection only contains normal users (role: 'user')
+  // Donors are in donors collection, requesters are in requesters collection
+  role: { type: String, enum: ['user', 'admin'], default: 'user', required: true },
   donorStatus: { type: String, enum: ['not_a_donor', 'available', 'unavailable', 'ineligible'], default: 'not_a_donor' },
   lastDonationDate: { type: Date, default: null },
   unavailableUntil: { type: Date, default: null },

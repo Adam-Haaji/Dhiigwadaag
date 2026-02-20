@@ -43,6 +43,7 @@
     "expo-web-browser": "~15.0.8",
     "frontend": "file:",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-hook-form": "^7.53.0",
     "react-native": "0.81.4",
     "react-native-actionsheet": "^2.4.2",
@@ -61,4 +62,9 @@
     "typescript": "~5.9.2"
   },
   "private": true
+  ,
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
 }
