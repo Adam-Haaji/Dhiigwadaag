@@ -27,11 +27,13 @@ export default function ChatbotPanel({ visible, onClose }: ChatbotPanelProps) {
   const { messages, loading, sendMessage, resetMessages } = useChatbot();
   const [inputText, setInputText] = React.useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const prevVisible = useRef(false);
 
   useEffect(() => {
-    if (!visible) {
+    if (visible && !prevVisible.current) {
       resetMessages();
     }
+    prevVisible.current = visible;
   }, [visible, resetMessages]);
 
   useEffect(() => {

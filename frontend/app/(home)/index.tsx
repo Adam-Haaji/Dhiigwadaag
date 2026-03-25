@@ -12,18 +12,26 @@ import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
 import HeaderBanner from '@/components/HeaderBanner';
 import { Ionicons } from '@expo/vector-icons';
-import { getHomeModePreference } from '@/service/homeMode';
+import { useRoleMode } from '@/context/RoleModeContext';
+import { goToMatchedRequests } from '@/service/matchedRequestsNavigation';
 // Connectivity diagnostics removed per request
 
 // Lazy-load LinearGradient like in Notifications to keep consistent header rendering
 let LinearGradient: any;
 try { LinearGradient = require('expo-linear-gradient').LinearGradient; } catch { LinearGradient = View; }
 
+// HomeGate: single Home tab always uses one resolved mode. For role="both" we ALWAYS show DonorHome (no flicker).
+function useHomeGateMode(): 'donor' | 'requester' {
+  const { role } = useRoleMode();
+  return role === 'both' || role === 'donor' ? 'donor' : 'requester';
+}
+
 export default function HomeIndex() {
   const { user } = require('@/hooks/useAuth').default();
   const role = String(user?.user?.role || '').toLowerCase();
   const { isDark, toggleDark } = useTheme();
-  // Removed old diagnostics state & handler (visual-only upgrade).
+  // Single source for what to show on Home tab: role-based, no async, no bounce.
+  const effectiveHomeMode = useHomeGateMode();
 
   // Lightweight entrance animation for body content (visual only)
   const bodyIntro = useRef(new Animated.Value(0)).current;
@@ -52,8 +60,6 @@ export default function HomeIndex() {
   const [recentRequests, setRecentRequests] = useState<any[]>([]);
   const [hasRequesterRecord, setHasRequesterRecord] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  const [homeMode, setHomeMode] = useState<'donor'|'requester'|null>(null);
 
   const isDonorCapable = hasDonorRecord || role === 'donor' || role === 'both' || role === 'admin';
   const isRequesterCapable = hasRequesterRecord || role === 'requester' || role === 'both' || role === 'admin';
@@ -174,30 +180,6 @@ export default function HomeIndex() {
 
   // Visual-only blood group quick-view
   const bloodGroups = useMemo(() => (['A+','A-','B+','B-','AB+','AB-','O+','O-'] as const), []);
-
-  // Resolve whether Home should show DonorHome vs RequesterHome
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const pref = await getHomeModePreference();
-      if (cancelled) return;
-
-      if (isDonorCapable && !isRequesterCapable) return setHomeMode('donor');
-      if (isRequesterCapable && !isDonorCapable) return setHomeMode('requester');
-
-      // If both, prefer stored user choice; else fallback to role field
-      if (isDonorCapable && isRequesterCapable) {
-        if (pref) return setHomeMode(pref);
-        if (role === 'donor') return setHomeMode('donor');
-        if (role === 'requester') return setHomeMode('requester');
-        return setHomeMode('requester');
-      }
-
-      // Neither: show requester-ish minimal home
-      setHomeMode('requester');
-    })();
-    return () => { cancelled = true; };
-  }, [isDonorCapable, isRequesterCapable, role]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -472,13 +454,13 @@ export default function HomeIndex() {
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
                 <IconSymbol
-                  name={homeMode === 'donor' ? 'heart.fill' : 'drop.fill'}
+                  name={effectiveHomeMode === 'donor' ? 'heart.fill' : 'drop.fill'}
                   size={18}
                   color={semanticColors.textInverse}
                 />
               </View>
               <View>
-                {homeMode === 'donor' ? (
+                {effectiveHomeMode === 'donor' ? (
                   <>
                     <Text style={[styles.headerTitle, { color: semanticColors.textInverse }]}>Welcome Back!</Text>
                     <Text style={[styles.headerSubtitle, { color: semanticColors.textInverse }]}>Save lives, donate blood</Text>
@@ -505,7 +487,7 @@ export default function HomeIndex() {
           </View>
         </HeaderBanner>
 
-        {homeMode === 'donor' && (
+        {effectiveHomeMode === 'donor' && (
           <>
             {/* Blood Group quick-view (donor home only) */}
             <Animated.View
@@ -545,7 +527,7 @@ export default function HomeIndex() {
               <View style={styles.actionsRow}>
                 <TouchableOpacity 
                   style={[styles.actionBtn, styles.actionBtnPrimary]} 
-                  onPress={() => router.push('/(home)/notification')} 
+                  onPress={() => { goToMatchedRequests(role); }} 
                   activeOpacity={0.9}
                 >
                   <LinearGradient colors={[theme.primary, '#E53935']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGradient}>
@@ -597,7 +579,7 @@ export default function HomeIndex() {
           </>
         )}
 
-        {homeMode === 'requester' && (
+        {effectiveHomeMode === 'requester' && (
           <>
             {/* How to Request Blood */}
             <View style={styles.requesterTips}>
@@ -713,25 +695,7 @@ export default function HomeIndex() {
 
         {/* Diagnostics section removed per request */}
 
-        {/* Donor Registration Banner */}
-        {(role === 'donor' || role === 'both' || role === 'admin') && (
-        <View style={styles.sectionCard}>
-          <View style={styles.bannerCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>Become a Donor</Text>
-              <Text style={styles.bannerSub}>Create your donor profile and get matched with people in need.
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push('/donorRegistration')}
-              style={styles.bannerCta}
-            >
-              <Text style={[styles.bannerCtaTxt, { color: semanticColors.textInverse }]}>Register</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        )}
-        {/* Donor-only tips moved into DonorHome above (strict separation) */}
+        {/* Donor Registration Banner removed: donor already completed registration before accessing dashboard */}
 
         {/* Emergency Banner */}
         {/* <View style={styles.emergencyBanner}>

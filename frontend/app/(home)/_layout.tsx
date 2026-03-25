@@ -1,19 +1,66 @@
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
+import { RoleModeProvider } from '@/context/RoleModeContext';
+import { getNavigatorRole, setNavigatorRole } from '@/service/homeMode';
 
+// BothTabs: only for role === "both". Donor/requester-only users must use (donor)/(requester) so Requests tab is hidden.
 export default function TabLayout() {
   const { user } = useAuth();
-  const role = String(user?.user?.role || '').toLowerCase();
+  const roleFromAuth = String(user?.user?.role || '').toLowerCase();
+  const lastStableRoleRef = React.useRef(roleFromAuth);
+  if (roleFromAuth) lastStableRoleRef.current = roleFromAuth;
+  const authRole = roleFromAuth || lastStableRoleRef.current;
+  const [persistedRole, setPersistedRole] = React.useState<string | null>(null);
   const { isDark } = useTheme();
+
+  // Persisted "navigator role": so returning donor-only users always see DonorTabs (no Requests tab).
+  React.useEffect(() => {
+    let cancelled = false;
+    getNavigatorRole().then((r) => {
+      if (!cancelled && r) setPersistedRole(r);
+    });
+    return () => { cancelled = true; };
+  }, [user?.user?.id]);
+
+  const role = persistedRole || authRole;
+
+  // Gate: (home) = BothTabs only when role is "both". Donor/requester -> dedicated tabs; user/none -> Choose Your Path.
+  useEffect(() => {
+    if (role === 'donor') {
+      router.replace('/(donor)');
+      return;
+    }
+    if (role === 'requester') {
+      router.replace('/(requester)');
+      return;
+    }
+    if (role === 'user' || role === 'none' || !role?.trim()) {
+      router.replace('/role');
+      return;
+    }
+  }, [role]);
+
   const [hasRequesterRecord, setHasRequesterRecord] = React.useState(false);
   const [hasDonorRecord, setHasDonorRecord] = React.useState(false);
+
+  // Old users: infer navigator role from records so donor-only users never see Requests tab.
+  React.useEffect(() => {
+    if (persistedRole !== null || !user?.user?.id) return;
+    if (hasDonorRecord && !hasRequesterRecord) {
+      setNavigatorRole('donor').then(() => setPersistedRole('donor'));
+    } else if (!hasDonorRecord && hasRequesterRecord) {
+      setNavigatorRole('requester').then(() => setPersistedRole('requester'));
+    } else if (hasDonorRecord && hasRequesterRecord) {
+      setNavigatorRole('both').then(() => setPersistedRole('both'));
+    }
+  }, [persistedRole, hasDonorRecord, hasRequesterRecord, user?.user?.id]);
 
   //  Tabs configuration
   const [activeReqCount, setActiveReqCount] = useState<number>(0);
@@ -100,100 +147,81 @@ export default function TabLayout() {
   const unavailableUntil = user?.user?.unavailableUntil ? new Date(user.user.unavailableUntil) : null;
   const donorStatus = String(user?.user?.donorStatus || 'not_a_donor');
 
-  let allTabs: TabBarItem[] = [
-    {
-      name: 'index',
-      route: '/(home)', // Use this for the home screen (points to index.tsx automatically)
-      icon: 'house.fill',
-      label: 'Home',
-    },
-    {
-      name: 'donor',
-      route: '/(home)/donor',
-      icon: 'heart.fill',
-      label: 'Donor',
-    },
-    {
-      name: 'request',
-      route: '/(home)/request',
-      icon: 'person.2.fill',
-      label: (role === 'requester' || role === 'both' || role === 'admin')
-        ? (activeReqCount > 0 ? `Requests (${activeReqCount})` : 'Requests')
-        : 'Request',
-    },
-    {
-      name: 'notification',
-      route: '/(home)/notification',
-      icon: 'bell.fill',
-      label: 'Notification',
-    },
-    {
-      name: 'profile',
-      route: '/(home)/profile',
-      icon: 'person.fill',
-      label: 'Profile',
-    },
-  ];
+  const baseTabs = React.useMemo(() => {
+    const requestLabel = activeReqCount > 0 ? `Requests (${activeReqCount})` : 'Requests';
+    const indexTab: TabBarItem = { name: 'index', route: '/(home)', icon: 'house.fill', label: 'Home' };
+    const donorTab: TabBarItem = { name: 'donor', route: '/(home)/donor', icon: 'heart.fill', label: 'Donor' };
+    const requestTab: TabBarItem = { name: 'request', route: '/(home)/request', icon: 'person.2.fill', label: requestLabel };
+    const notificationTab: TabBarItem = { name: 'notification', route: '/(home)/notification', icon: 'bell.fill', label: 'Notification' };
+    const profileTab: TabBarItem = { name: 'profile', route: '/(home)/profile', icon: 'person.fill', label: 'Profile' };
+    return { indexTab, donorTab, requestTab, notificationTab, profileTab };
+  }, [activeReqCount]);
 
-  const tabs: TabBarItem[] = React.useMemo(() => {
-    // Check actual records, not just role field (for role separation)
-    const isDonor = hasDonorRecord || role === 'donor' || role === 'both' || role === 'admin';
-    const isRequester = hasRequesterRecord || role === 'requester' || role === 'both' || role === 'admin';
-    
-    if (isDonor && !isRequester) return allTabs.filter(t => ['index','donor','notification','profile'].includes(t.name));
-    if (isRequester && !isDonor) return allTabs.filter(t => ['index','request','notification','profile'].includes(t.name));
-    if (isDonor && isRequester) return allTabs; // both
-    if (role === 'admin') return allTabs;
-    // role none -> only show Home + Profile
-    return allTabs.filter(t => ['index','profile'].includes(t.name));
-  }, [role, hasRequesterRecord, hasDonorRecord]);
+  // IMPORTANT (navigation stability): keep a stable tab list so role/mode changes do NOT
+  // change the set/order of tabs. Per-screen guards (already present) handle access.
+  const stableTabs = React.useMemo(
+    () => [baseTabs.indexTab, baseTabs.donorTab, baseTabs.requestTab, baseTabs.notificationTab, baseTabs.profileTab],
+    [baseTabs]
+  );
 
-  // ✅ iOS navigation
-  if (Platform.OS === 'ios') {
-    return (
-      <>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <NativeTabs>
-        <NativeTabs.Trigger name="index"> {/* opens app/(home)/index.tsx */}
-          <Icon sf="house.fill" drawable="ic_home" />
-          <Label>Home</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="donor">
-          <Icon sf="heart.fill" drawable="ic_donor" />
-          <Label>Donor</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="request">
-          <Icon sf="person.2.fill" drawable="ic_request" />
-          <Label>Request</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="notification">
-          <Icon sf="bell.fill" drawable="ic_notification" />
-          <Label>Notification</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="profile">
-          <Icon sf="person.fill" drawable="ic_profile" />
-          <Label>Profile</Label>
-        </NativeTabs.Trigger>
-        </NativeTabs>
-      </>
-    );
+  // Stable screenOptions so Stack identity and behavior never force remounts.
+  const stackScreenOptions = React.useMemo(
+    () => ({
+      headerShown: false,
+      animation: 'none' as const,
+      contentStyle: { paddingBottom: 72 },
+      unmountOnBlur: false,
+    }),
+    []
+  );
+
+  // Do not render BothTabs when role is donor/requester (redirect will send to (donor)/(requester)).
+  if (role === 'donor' || role === 'requester') {
+    return null;
+  }
+  // User/none: redirect to Choose Your Path (never show 5 tabs for initial selection).
+  if (role === 'user' || role === 'none' || !role?.trim()) {
+    return null;
+  }
+  // While we have no persisted role and auth says "both", wait for record check so we don't flash 5 tabs for donor-only users.
+  if (persistedRole === null && authRole === 'both') {
+    return null;
   }
 
-  // ✅ Android & Web navigation
-  // Return a Stack without children (file-based routing) to avoid "Layout children must be of type Screen" warning,
-  // and render the FloatingTabBar as a sibling.
   return (
-    <>
+    <RoleModeProvider
+      roleFromProfile={role}
+      hasDonorRecord={hasDonorRecord}
+      hasRequesterRecord={hasRequesterRecord}
+    >
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-          // Add bottom padding so content doesn't hide behind sticky tab bar
-          contentStyle: { paddingBottom: 72 },
-        }}
-      />
-      <FloatingTabBar tabs={tabs} badges={{ notification: unreadCount, donor: matchCount, request: activeReqCount }} />
-    </>
+      {Platform.OS === 'ios' ? (
+        <NativeTabs>
+          {stableTabs.map((t) => (
+            <NativeTabs.Trigger key={t.name} name={t.name as any}>
+              <Icon sf={t.icon as any} drawable={drawableFor(t.name) as any} />
+              <Label>{t.label}</Label>
+            </NativeTabs.Trigger>
+          ))}
+        </NativeTabs>
+      ) : (
+        <>
+          <Stack screenOptions={stackScreenOptions} />
+          <FloatingTabBar
+            tabs={stableTabs}
+            badges={{ notification: unreadCount, donor: matchCount, request: activeReqCount }}
+          />
+        </>
+      )}
+    </RoleModeProvider>
   );
+}
+
+function drawableFor(name: string): string | undefined {
+  if (name === 'index') return 'ic_home';
+  if (name === 'donor') return 'ic_donor';
+  if (name === 'request') return 'ic_request';
+  if (name === 'notification') return 'ic_notification';
+  if (name === 'profile') return 'ic_profile';
+  return undefined;
 }

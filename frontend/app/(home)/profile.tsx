@@ -13,7 +13,6 @@ import HeaderBanner from '@/components/HeaderBanner';
 
 
 export default function ProfileScreen() {
-  const [isAvailable, setIsAvailable] = useState(true);
   const [userProfile, setUserProfile] = useState<any>({});
   const [donorProfile, setDonorProfile] = useState<any>(null);
   const { logout } = useAuthHook();
@@ -273,7 +272,6 @@ export default function ProfileScreen() {
       try {
         const me = await apiClient.me();
         setUserProfile(me || {});
-        if (typeof me?.availability === 'boolean') setIsAvailable(!!me.availability);
         
         // Load donor profile if user is a donor
         try {
@@ -308,6 +306,34 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     await logout();
     router.replace('/login');
+  };
+
+  const donorAvailabilityStatus = String(donorProfile?.availabilityStatus || '').toLowerCase();
+  const hasDonorAvailability = donorAvailabilityStatus === 'available' || donorAvailabilityStatus === 'unavailable';
+  const isAvailable = hasDonorAvailability
+    ? donorAvailabilityStatus === 'available'
+    : !!userProfile?.availability;
+
+  const cooldownUntilRaw = donorProfile?.nextAvailableDate || userProfile?.unavailableUntil || null;
+  const cooldownUntil = cooldownUntilRaw ? new Date(cooldownUntilRaw) : null;
+  const isCooldownActive = hasDonorAvailability && !isAvailable;
+
+  const handleAvailabilityToggle = (nextValue: boolean) => {
+    if (isCooldownActive && nextValue) {
+      const when = cooldownUntil && !isNaN(cooldownUntil.getTime())
+        ? cooldownUntil.toISOString().slice(0, 10)
+        : null;
+      Alert.alert(
+        'Unavailable',
+        when ? `You are unavailable until ${when}` : 'You are currently unavailable to donate.'
+      );
+      return;
+    }
+
+    // For non-donor profile mode, preserve existing local toggle behavior.
+    if (!hasDonorAvailability) {
+      setUserProfile((prev: any) => ({ ...prev, availability: nextValue }));
+    }
   };
 
   return (
@@ -427,7 +453,8 @@ export default function ProfileScreen() {
             </View>
             <Switch
               value={isAvailable}
-              onValueChange={setIsAvailable}
+              onValueChange={handleAvailabilityToggle}
+              disabled={isCooldownActive}
               trackColor={{ false: semanticColors.borderSubtle, true: semanticColors.interactivePrimary }}
               thumbColor={semanticColors.textInverse}
             />

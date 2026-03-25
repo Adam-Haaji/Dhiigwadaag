@@ -227,6 +227,7 @@ export const api = {
     weightKg: number;
     consentGiven: boolean;
     emergencyContact: { name: string; relationship: string; phone: string };
+    donatedBefore?: boolean;
     lastDonationDate: string; // ISO string
     availabilityStatus: 'available' | 'unavailable';
     donations?: { donationDate: string; volumeMl: number; screeningClear: boolean }[];

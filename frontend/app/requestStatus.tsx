@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Platform, ToastAndroid } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import apiClient from '../service/api';
 import colorsBase, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
 
 export default function RequestStatus() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -46,20 +47,15 @@ export default function RequestStatus() {
 
   useEffect(() => { load(); }, [load]);
 
-  const notify = (msg: string) => {
-    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
-    else Alert.alert('Info', msg);
-  };
-
   const handleDonorConfirm = async () => {
     if (!id) return;
     try {
       setSubmitting(true);
   await apiClient.donorConfirmDonation(id);
-      notify('Donation fulfilled successfully ✅');
+      notify.success('Donation fulfilled successfully ✅');
       await load();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Unable to confirm donation');
+      notify.error('Error', e?.message || 'Unable to confirm donation');
     } finally {
       setSubmitting(false);
     }

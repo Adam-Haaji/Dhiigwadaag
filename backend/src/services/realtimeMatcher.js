@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Request from '../models/Request.js';
 import BloodRequest from '../models/BloodRequest.js';
 import Notification from '../models/Notification.js';
+import { filterNewNotifications } from '../utils/notificationHelper.js';
 import { getPriorityTiers, tierLabel } from '../utils/bloodPriority.js';
 import { getDistrictExpansionOrder } from '../utils/districtNeighbors.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
@@ -139,22 +140,31 @@ export async function onRequestCreated(reqDocLike) {
         timeRemaining = `${hoursRemaining}h ${minutesRemaining}m`;
       }
       
-      // Notify requester: donor matched
+      // Notify requester: donor matched (requester-only payload; no donor phone until FULFILLED)
+      const donorDocForReq = donor._id ? await Donor.findById(donor._id).select('bloodGroup district').lean().catch(() => null) : null;
+      const requestName = norm(req.patientName) || 'Request';
+      const bloodTypeLetters = String(req.bloodGroup || '').trim() || '—';
       notes.push({
         userId: req.requesterId,
-        title: 'Donor Matched',
-        message: `A donor has been found for ${req.patientName} (${req.bloodGroup}) in ${req.district}.`,
+        title: 'Donor found',
+        message: 'Donor found',
         type: 'request',
         urgent: String(req.urgencyLevel).toLowerCase() === 'critical',
-        meta: { 
-          requestId: req._id, 
-          status: 'matched', 
+        meta: {
+          type: 'MATCHED',
+          audience: 'requester',
+          requestId: req._id,
+          donorId: donor._id,
+          status: 'matched',
           tier: tierLabel(tierIndex),
-          // Donor details will be shown after accept/fulfilled (privacy)
+          requestName,
+          requestBloodType: bloodTypeLetters,
+          donorBloodGroup: donorDocForReq?.bloodGroup || req.bloodGroup,
+          donorDistrict: donorDocForReq?.district || req.district,
         },
       });
       
-      // Notify donor: matched with requester details
+      // Notify donor: matched with requester details (same requestId as listMatchesForMe) — do not change donor payload
       if (donor.user) {
         const donorDoc = await Donor.findById(donor._id).select('fullName phone district bloodGroup').lean().catch(() => null);
         notes.push({
@@ -163,14 +173,14 @@ export async function onRequestCreated(reqDocLike) {
           message: `You are matched to donate ${req.bloodGroup} for ${req.patientName} in ${req.district}. ${timeRemaining ? `Time remaining: ${timeRemaining}` : ''}`,
           type: 'request',
           urgent: String(req.urgencyLevel).toLowerCase() === 'critical',
-          meta: { 
+          meta: {
             type: 'MATCHED',
-            requestId: req._id, 
+            audience: 'donor',
+            requestId: req._id,
             matchId: req._id,
             donorId: donor._id,
-            status: 'matched', 
+            status: 'matched',
             tier: tierLabel(tierIndex),
-            // Requester details for donor
             requesterName,
             requesterPhone,
             requesterDistrict,
@@ -183,7 +193,8 @@ export async function onRequestCreated(reqDocLike) {
           },
         });
       }
-      if (notes.length) await Notification.insertMany(notes);
+      const toInsert = await filterNewNotifications(Notification, notes);
+      if (toInsert.length) await Notification.insertMany(toInsert);
       return { matched: true, donorId: donor._id, tierIndex, tierUsed };
     }
 
@@ -223,13 +234,27 @@ export async function onRequestCreated(reqDocLike) {
     
     const notes = [];
     if (req.requesterId) {
+      const donorDocForReq = donor._id ? await Donor.findById(donor._id).select('bloodGroup district').lean().catch(() => null) : null;
+      const requestName = norm(req.patientName) || 'Request';
+      const bloodTypeLetters = String(req.bloodType || '').trim() || '—';
       notes.push({
         userId: req.requesterId,
-        title: 'Donor Matched',
-        message: `A donor has been found for ${req.patientName} (${req.bloodType}) in ${req.location}.`,
+        title: 'Donor found',
+        message: 'Donor found',
         type: 'request',
         urgent: String(req.urgency).toLowerCase() !== 'normal',
-        meta: { requestId: req._id, status: 'Matched', tier: tierLabel(tierIndex) },
+        meta: {
+          type: 'MATCHED',
+          audience: 'requester',
+          requestId: req._id,
+          donorId: donor._id,
+          status: 'Matched',
+          tier: tierLabel(tierIndex),
+          requestName,
+          requestBloodType: bloodTypeLetters,
+          donorBloodGroup: donorDocForReq?.bloodGroup || req.bloodType,
+          donorDistrict: donorDocForReq?.district || req.location,
+        },
       });
     }
     if (donor.user) {
@@ -240,11 +265,13 @@ export async function onRequestCreated(reqDocLike) {
         message: `You are matched to donate ${req.bloodType} for ${req.patientName} in ${req.location}. ${timeRemaining ? `Time remaining: ${timeRemaining}` : ''}`,
         type: 'request',
         urgent: String(req.urgency).toLowerCase() !== 'normal',
-        meta: { 
-          requestId: req._id, 
-          status: 'Matched', 
+        meta: {
+          type: 'MATCHED',
+          audience: 'donor',
+          requestId: req._id,
+          matchId: req._id,
+          status: 'Matched',
           tier: tierLabel(tierIndex),
-          // Requester details for donor
           requesterName,
           requesterPhone,
           requesterDistrict,
@@ -257,7 +284,8 @@ export async function onRequestCreated(reqDocLike) {
         },
       });
     }
-    if (notes.length) await Notification.insertMany(notes);
+    const toInsert = await filterNewNotifications(Notification, notes);
+    if (toInsert.length) await Notification.insertMany(toInsert);
     return { matched: true, donorId: donor._id, tierIndex, tierUsed };
   } catch (e) {
     console.error('[matcher] Failed onRequestCreated', e?.message || e);

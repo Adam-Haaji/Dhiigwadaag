@@ -10,6 +10,7 @@ import api from '@/service/api';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import HeroCard from '@/components/HeroCard';
+import { goToMatchedRequests } from '@/service/matchedRequestsNavigation';
 
 export default function DonorDashboard() {
   const { user, setUser } = useAuth();
@@ -45,15 +46,7 @@ export default function DonorDashboard() {
   }
 
   async function openLatestMatchOrNotification() {
-    try {
-      const m = await api.listMyMatches();
-      if (Array.isArray(m) && m.length) {
-        const topId = String(m[0]._id);
-        router.push({ pathname: '/matchedRequestDetail', params: { id: topId, mode: 'donor' } });
-        return;
-      }
-    } catch {}
-    router.push({ pathname: '/(home)/notification', params: { openLatestRequest: '1' } });
+    await goToMatchedRequests(role);
   }
 
   /** Navigate to Matched Request Details when donor taps "You are matched" (same as View Matched Requests). */

@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   TextInput,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +16,8 @@ import { semanticColors, radii, spacing } from '@/constants/colors';
 import { fontFamilies } from '@/constants/fonts';
 import { moderateScale, responsiveFont } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 type Params = { email?: string };
 
@@ -88,9 +89,9 @@ export default function VerificationScreen() {
       // TODO: Call backend to resend code to the given email
       // Example: await api.post('/api/auth/forgot-password', { email })
       await new Promise((r) => setTimeout(r, 800));
-      Alert.alert('Code Sent', 'A new verification code has been sent.');
+      notify.success(MESSAGES.verification.resend.success.title, MESSAGES.verification.resend.success.body);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Unable to resend code');
+      notify.error(MESSAGES.verification.resend.fail.title, e?.message || MESSAGES.verification.resend.fail.body);
     } finally {
       setLoading(false);
     }

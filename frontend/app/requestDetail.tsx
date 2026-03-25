@@ -7,6 +7,7 @@ import apiClient from '../service/api';
 import useAuthHook from '@/hooks/useAuth';
 import colorsBase, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -53,14 +54,14 @@ export default function RequestDetail() {
 
   const handleResponse = async (method: 'call'|'whatsapp'|'donate') => {
     if (!id) return;
-    if (!userId) { Alert.alert('Login required', 'Please log in before responding.'); return; }
+    if (!userId) { notify.error('Login required', 'Please log in before responding.'); return; }
     try {
       setSubmitting(true);
   await apiClient.respondToRequest(id, { donorId: userId, method });
-      Alert.alert('Success', 'Your response has been recorded.');
+      notify.success('Your response has been recorded.');
       await load();
     } catch {
-      Alert.alert('Error', 'Could not record response.');
+      notify.error('Could not record response.');
     } finally {
       setSubmitting(false);
     }
@@ -68,14 +69,14 @@ export default function RequestDetail() {
 
   const callRequester = async () => {
     const phone = getRequesterPhone();
-    if (!phone) { Alert.alert('No phone', 'Requester phone number is unavailable.'); return; }
+    if (!phone) { notify.info('No phone', 'Requester phone number is unavailable.'); return; }
     await handleResponse('call');
     Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Error', 'Unable to open dialer.'));
   };
 
   const whatsappRequester = async () => {
     const phone = getRequesterPhone();
-    if (!phone) { Alert.alert('No phone', 'Requester phone number is unavailable.'); return; }
+    if (!phone) { notify.info('No phone', 'Requester phone number is unavailable.'); return; }
     const text = encodeURIComponent('Hello, I can donate for your blood request.');
     const waUrl = `whatsapp://send?phone=${phone}&text=${text}`;
     const waWeb = `https://wa.me/${phone}?text=${text}`;
@@ -100,10 +101,10 @@ export default function RequestDetail() {
         // fallback
   await apiClient.respondToRequest(id, { donorId: userId!, method: 'donate' });
       }
-      Alert.alert('Success', 'Donation fulfilled successfully ✅');
+      notify.success('Donation fulfilled successfully ✅');
       await load();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Unable to confirm donation');
+      notify.error('Error', e?.message || 'Unable to confirm donation');
     } finally {
       setSubmitting(false);
     }
@@ -227,13 +228,13 @@ export default function RequestDetail() {
                   setSubmitting(true);
                   const res = await apiClient.fulfillRequest(id);
                   if (res?.success) {
-                    Alert.alert('Success', 'Request marked as Fulfilled successfully.');
+                    notify.success('Request marked as Fulfilled successfully.');
                     await load();
                   } else {
-                    Alert.alert('Error', 'Could not update status.');
+                    notify.error('Could not update status.');
                   }
                 } catch {
-                  Alert.alert('Error', 'Could not update status.');
+                  notify.error('Could not update status.');
                 } finally {
                   setSubmitting(false);
                 }
@@ -252,13 +253,13 @@ export default function RequestDetail() {
                   setSubmitting(true);
                   const res = await apiClient.cancelRequest(id);
                   if (res?.success) {
-                    Alert.alert('Success', 'This blood request has been cancelled.');
+                    notify.success('This blood request has been cancelled.');
                     await load();
                   } else {
-                    Alert.alert('Error', 'Could not cancel request.');
+                    notify.error('Could not cancel request.');
                   }
                 } catch {
-                  Alert.alert('Error', 'Could not cancel request.');
+                  notify.error('Could not cancel request.');
                 } finally {
                   setSubmitting(false);
                 }

@@ -5,7 +5,7 @@
 
 const BLOOD_TYPE_PATTERN = /(?:blood\s*type|dhiig|dhiiga)?\s*(AB[+-]|[ABO][+-])/i;
 
-/** @typedef {'AVAILABILITY_CHECK'|'CREATE_REQUEST_GUIDE'|'COMPATIBILITY_INFO'|'EMERGENCY_GUIDE'|'OFF_TOPIC'} Intent */
+/** @typedef {'GREETING'|'AVAILABILITY_CHECK'|'CREATE_REQUEST_GUIDE'|'COMPATIBILITY_INFO'|'EMERGENCY_GUIDE'|'OFF_TOPIC'} Intent */
 
 /**
  * Classify user message intent.
@@ -15,6 +15,12 @@ const BLOOD_TYPE_PATTERN = /(?:blood\s*type|dhiig|dhiiga)?\s*(AB[+-]|[ABO][+-])/
 export function classify(message) {
   const text = String(message || '').trim();
   const lower = text.toLowerCase();
+
+  const greetingOnly = /^(hi|hello|asc|asalaamu\s*calaykum|sxb|hey|salaan|salaam|waa\s*alaikum\s*salaam|howdy|yo|sup)\s*!*\.*$/i.test(lower)
+    || (text.length <= 25 && /^(hi|hello|asc|sxb|hey|salaan|salaam)/i.test(lower));
+  if (greetingOnly) {
+    return { intent: 'GREETING' };
+  }
 
   const hasBloodDomain = /blood|dhiig|donor|dhiib|request|codsi|emergency|degdeg|hospital|cusbitaal|available|heli|jiraa|compatible/i.test(lower);
   if (!hasBloodDomain) {
@@ -37,7 +43,7 @@ export function classify(message) {
     return { intent: 'EMERGENCY_GUIDE' };
   }
 
-  const createKeywords = /create|samee|codsiga|how\s*to\s*request|make\s*a\s*request/i.test(lower);
+  const createKeywords = /create|samee|codsiga|how\s*to\s*request|make\s*a\s*request|sideen.*request|request.*u\s*diraa|sida.*request|send\s*(a\s*)?request/i.test(lower);
   if (createKeywords) {
     return { intent: 'CREATE_REQUEST_GUIDE' };
   }

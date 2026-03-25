@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -22,6 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { semanticColors, radii, spacing } from '@/constants/colors';
 import { fontFamilies } from '@/constants/fonts';
 import { moderateScale, responsiveFont } from '@/constants/theme';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 type FormState = {
   patientName: string;
@@ -91,7 +92,7 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
   const handleSubmit = async () => {
     setSubmitted(true);
     if (hasErrors) {
-      Alert.alert('Check your input', 'Please fill in all required fields correctly.');
+      notify.warning(MESSAGES.request.create.validation.title, MESSAGES.request.create.validation.body);
       return;
     }
     try {
@@ -108,11 +109,15 @@ const CreateRequestScreen: React.FC<{ onBack?: () => void; onSubmitSuccess?: (da
         notes: form.notes?.trim() || undefined,
       };
       await api.createRequest(payload);
+      notify.success(MESSAGES.request.create.success.title, MESSAGES.request.create.success.body);
       onSubmitSuccess?.(form);
       // Navigate back to Request dashboard
       router.replace('/(home)/request');
     } catch (e: any) {
-      Alert.alert('Submit failed', e?.message || 'Could not create request.');
+      notify.error(
+        MESSAGES.request.create.fail.title,
+        e?.message || MESSAGES.request.create.fail.body
+      );
     }
   };
   const handleBack = () => {

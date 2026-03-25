@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Platform,
   ScrollView,
   Text,
@@ -18,6 +17,8 @@ import { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 
 
@@ -91,9 +92,9 @@ export default function EditProfileScreen() {
       if (token && updated) {
         await setUser({ token, user: updated });
       }
-      Alert.alert('Success', 'Changes saved');
+      notify.success(MESSAGES.profile.save.success.title, MESSAGES.profile.save.success.body);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to save changes');
+      notify.error(MESSAGES.profile.save.fail.title, e?.message || MESSAGES.profile.save.fail.body);
     } finally {
       setSaving(false);
     }

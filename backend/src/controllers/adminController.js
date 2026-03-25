@@ -8,6 +8,20 @@ import { authMiddleware } from '../middleware/authMiddleware.js';
 import { isDBReady } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import {
+  USERS_REPORT_COLUMNS,
+  DONORS_REPORT_COLUMNS,
+  REQUESTS_REPORT_COLUMNS,
+  DONATIONS_REPORT_COLUMNS,
+  rowsToCsv,
+  mapDonorToDonorsReportRow,
+  mapRequestToRequestsReportRow,
+  mapDonationToDonationsReportRow,
+  formatDate as reportFormatDate,
+  formatValue,
+  safeId,
+  EMPTY,
+} from '../utils/reportCsv.js';
 
 // Helper function to handle MongoDB errors gracefully
 const handleDBError = (err, res, endpointName) => {
@@ -169,7 +183,7 @@ export const getDashboardStats = async (req, res) => {
   }
 };
 
-// GET /admin/users - Return all users except admins (user, requester, none)
+// GET /admin/users - Return users and admins (so Admin Panel can filter by role)
 export const getUsers = async (req, res) => {
   try {
     const { 
@@ -184,8 +198,8 @@ export const getUsers = async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const query = {};
     
-    // Exclude admins - show normal users (user, requester, none)
-    query.role = { $ne: 'admin' };
+    // Include both normal users and admins so the panel can filter (Users / Admins)
+    query.role = { $in: ['user', 'admin', 'none'] };
     
     // If specific role filter is provided, apply it
     if (role && role !== 'all') {
@@ -389,16 +403,24 @@ export const updateUser = async (req, res) => {
       }
     }
     
-    // Validate role if provided
-    if (updates.role && !['user', 'admin'].includes(updates.role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be "user" or "admin"' });
+    // Validate role if provided (backend stores "user" | "admin"; frontend may send "admins" -> normalize to "admin")
+    const incomingRole = req.body.role;
+    if (updates.role !== undefined) {
+      const roleNormalized = String(updates.role).toLowerCase().trim();
+      const roleToSave = roleNormalized === 'admins' ? 'admin' : roleNormalized;
+      if (!['user', 'admin'].includes(roleToSave)) {
+        return res.status(400).json({ error: 'Invalid role. Must be "user" or "admin"' });
+      }
+      updates.role = roleToSave;
     }
-    
+    console.log('[Admin updateUser] Incoming role:', incomingRole, '-> saved as:', updates.role);
+
     const user = await User.findByIdAndUpdate(id, updates, { new: true }).select('-password');
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+    console.log('[Admin updateUser] Saved role:', user.role);
+
     const userObj = user.toObject();
     userObj.status = user.availability === false || user.donorStatus === 'unavailable' ? 'inactive' : 'active';
     userObj.isActive = userObj.status === 'active';
@@ -2092,6 +2114,216 @@ export const getReportsSummary = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+};
+
+// GET /admin/reports/export?type=users|donors|requests|donations&mode=simple
+// CSV export only; does not change DB schema or core business logic.
+export const exportReportCsv = async (req, res) => {
+  try {
+    const type = String(req.query.type || '').toLowerCase();
+    let columns;
+    let rows = [];
+
+    if (type === 'users') {
+      const users = await User.find({ role: { $ne: 'admin' } })
+        .select('-password')
+        .lean();
+      // CSV must contain ONLY the 7 columns below. Do not send res.json(users) or raw user objects.
+      const statusFor = (u) => {
+        if (u && typeof u.status === 'string' && u.status.trim()) return u.status.trim().toLowerCase();
+        if (typeof u?.isActive === 'boolean') return u.isActive ? 'active' : 'inactive';
+        const isInactive = u?.availability === false || u?.donorStatus === 'unavailable';
+        if (u?.availability !== undefined || u?.donorStatus !== undefined) return isInactive ? 'inactive' : 'active';
+        return EMPTY;
+      };
+      columns = USERS_REPORT_COLUMNS;
+      rows = users.map((u) => ({
+        userId: safeId(u._id),
+        name: formatValue(u?.name),
+        email: formatValue(u?.email),
+        phone: formatValue(u?.phone),
+        createdAt: reportFormatDate(u?.createdAt),
+        updatedAt: reportFormatDate(u?.updatedAt),
+        status: statusFor(u),
+      }));
+    } else if (type === 'donors') {
+      const donors = await Donor.find({})
+        .populate('user', 'name email phone')
+        .lean();
+      columns = DONORS_REPORT_COLUMNS;
+      rows = donors.map(mapDonorToDonorsReportRow);
+    } else if (type === 'requests') {
+      // Reuse core query logic from getRequests (simple, no paging for CSV)
+      const requests = await Request.find({})
+        .populate('requesterId', 'name email phone')
+        .populate('matchedDonorId', 'name email phone bloodType location')
+        .populate('fulfilledBy', 'fullName phone email bloodGroup district')
+        .lean();
+
+      const statusMap = {
+        Pending: 'pending',
+        Contacted: 'matched',
+        Matched: 'matched',
+        Accepted: 'matched',
+        Fulfilled: 'fulfilled',
+        Cancelled: 'cancelled',
+      };
+      const urgencyMap = {
+        Normal: 'normal',
+        Urgent: 'urgent',
+        Critical: 'critical',
+      };
+
+      const mapped = requests.map((reqDoc) => {
+        const formatDate = (date) => {
+          if (!date) return undefined;
+          if (date instanceof Date) return date;
+          if (typeof date === 'string') return new Date(date);
+          return new Date(date);
+        };
+
+        const requesterIdValue = reqDoc.requesterId
+          ? typeof reqDoc.requesterId === 'object' && reqDoc.requesterId._id
+            ? reqDoc.requesterId._id.toString()
+            : reqDoc.requesterId.toString()
+          : null;
+
+        const requesterObj =
+          reqDoc.requester ||
+          (reqDoc.requesterId &&
+          typeof reqDoc.requesterId === 'object' &&
+          reqDoc.requesterId.name
+            ? {
+                _id: reqDoc.requesterId._id?.toString() || requesterIdValue,
+                name: reqDoc.requesterId.name || '',
+                email: reqDoc.requesterId.email || '',
+                phone: reqDoc.requesterId.phone || '',
+              }
+            : undefined);
+
+        return {
+          _id: reqDoc._id?.toString() || String(reqDoc._id),
+          requesterId: requesterIdValue,
+          requester: requesterObj,
+          patientName: reqDoc.patientName || '',
+          bloodType: reqDoc.bloodType || '',
+          bloodGroup: reqDoc.bloodType || '',
+          location: reqDoc.location || '',
+          district: reqDoc.location || '',
+          units: reqDoc.units || 1,
+          urgency: urgencyMap[reqDoc.urgency] || 'normal',
+          urgencyLevel:
+            reqDoc.urgency === 'Critical'
+              ? 'critical'
+              : reqDoc.urgency === 'Urgent'
+              ? 'urgent'
+              : 'normal',
+          status: statusMap[reqDoc.status] || reqDoc.status?.toLowerCase() || 'pending',
+          hospital: reqDoc.hospitalName || '',
+          contactPhone: reqDoc.contactPhone || '',
+          createdAt: formatDate(reqDoc.createdAt),
+          updatedAt: formatDate(reqDoc.updatedAt),
+          donorId: reqDoc.matchedDonorId
+            ? typeof reqDoc.matchedDonorId === 'object'
+              ? reqDoc.matchedDonorId._id?.toString()
+              : reqDoc.matchedDonorId.toString()
+            : undefined,
+          fulfilledBy: reqDoc.fulfilledBy
+            ? typeof reqDoc.fulfilledBy === 'object'
+              ? reqDoc.fulfilledBy._id?.toString()
+              : reqDoc.fulfilledBy.toString()
+            : undefined,
+        };
+      });
+
+      columns = REQUESTS_REPORT_COLUMNS;
+      rows = mapped.map(mapRequestToRequestsReportRow);
+    } else if (type === 'donations') {
+      // Use same unified donations list as getDonations, but simplified for CSV
+      const donationQuery = {};
+      const donationsFromModel = await Donation.find(donationQuery)
+        .populate('donorId', 'name email phone bloodType location')
+        .populate({
+          path: 'requestId',
+          select: 'patientName units hospitalName location bloodType fulfilledBy status',
+          populate: {
+            path: 'fulfilledBy',
+            select: 'fullName phone email bloodGroup district',
+            model: 'Donor',
+          },
+        })
+        .lean();
+
+      const formatDate = (date) => {
+        if (!date) return null;
+        if (date instanceof Date) return date;
+        if (typeof date === 'string') return new Date(date);
+        return new Date(date);
+      };
+
+      const donationsSimple = donationsFromModel.map((donation) => {
+        const request = donation.requestId;
+        const donorUser = donation.donorId;
+
+        let donorInfo = null;
+        if (request && request.fulfilledBy) {
+          donorInfo = {
+            _id: request.fulfilledBy._id?.toString() || '',
+            name: request.fulfilledBy.fullName || '',
+            fullName: request.fulfilledBy.fullName || '',
+            phone: request.fulfilledBy.phone || '',
+            email: request.fulfilledBy.email || '',
+            bloodGroup: request.fulfilledBy.bloodGroup || '',
+            district: request.fulfilledBy.district || '',
+          };
+        } else if (donorUser) {
+          donorInfo = {
+            _id: donorUser._id?.toString() || '',
+            name: donorUser.name || '',
+            fullName: donorUser.name || '',
+            phone: donorUser.phone || '',
+            email: donorUser.email || '',
+            bloodGroup: donorUser.bloodType || '',
+            district: donorUser.location || '',
+          };
+        }
+
+        return {
+          _id: donation._id?.toString() || String(donation._id),
+          requestId: request
+            ? typeof request === 'object'
+              ? request._id?.toString()
+              : request.toString()
+            : null,
+          donor: donorInfo,
+          donorName: donorInfo?.name || donorInfo?.fullName || '-',
+          units: request?.units || 1,
+          hospital: request?.hospitalName || '-',
+          donationDate: formatDate(donation.donationDate) || formatDate(donation.createdAt),
+          status: donation.status === 'Completed' ? 'fulfilled' : 'scheduled',
+          createdAt: formatDate(donation.createdAt),
+          updatedAt: formatDate(donation.updatedAt),
+          patientName: request?.patientName || '',
+          bloodType: request?.bloodType || '',
+          location: request?.location || '',
+        };
+      });
+
+      columns = DONATIONS_REPORT_COLUMNS;
+      rows = donationsSimple.map(mapDonationToDonationsReportRow);
+    } else {
+      return res.status(400).json({ error: 'Invalid report type. Use users, donors, requests, or donations.' });
+    }
+
+    const csv = rowsToCsv(columns, rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const filename = type === 'users' ? 'users-report.csv' : `${type}-report.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    return res.send(csv);
+  } catch (err) {
+    console.error('[Admin exportReportCsv] Error:', err);
+    return res.status(500).json({ error: 'Failed to export CSV' });
   }
 };
 

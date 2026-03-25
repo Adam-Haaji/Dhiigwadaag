@@ -33,7 +33,11 @@ export const AuthProvider: React.FC<any> = ({ children }) => {
   const logout = async () => {
     setUserState(null);
     await Storage.removeItem("@user");
-  await apiClient.clearToken();
+    try {
+      const { clearNavigatorRole } = require('../service/homeMode');
+      await clearNavigatorRole();
+    } catch {}
+    await apiClient.clearToken();
   };
 
   return <AuthContext.Provider value={{ user, setUser, login, logout }}>{children}</AuthContext.Provider>;

@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Blood Donation App",
-  "slug": "blood-donation-app-dev",
+    "slug": "blood-donation-app-dev",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "updates": {
-      "enabled": false,
-      "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_ERROR_RECOVERY"
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF6F6"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,11 +24,13 @@
       }
     },
     "android": {
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFF6F6"
+      },
       "package": "com.blooddonation.dev"
     },
-    
     "plugins": [
       "expo-router",
       "expo-notifications"

@@ -8,6 +8,7 @@ import useAuthHook from '@/hooks/useAuth';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
+import { notify } from '@/ui/feedback/notify';
 
 export default function RequestDetail() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -66,15 +67,15 @@ export default function RequestDetail() {
 
   const handleResponse = async (method: 'call'|'whatsapp'|'donate') => {
     if (!id) return;
-    if (!userId) { Alert.alert('Login required', 'Please log in before responding.'); return; }
+    if (!userId) { notify.error('Login required', 'Please log in before responding.'); return; }
     try {
       setSubmitting(true);
   await apiClient.respondToRequest(id, { donorId: userId, method });
-      Alert.alert('Success', 'Your response has been recorded.');
+      notify.success('Your response has been recorded.');
       // Refresh local data
       load();
     } catch (e: any) {
-      Alert.alert('Error', 'Could not record response.');
+      notify.error('Could not record response.');
     } finally {
       setSubmitting(false);
     }
@@ -82,14 +83,14 @@ export default function RequestDetail() {
 
   const callRequester = async () => {
     const phone = getRequesterPhone();
-    if (!phone) { Alert.alert('No phone', 'Requester phone number is unavailable.'); return; }
+    if (!phone) { notify.info('No phone', 'Requester phone number is unavailable.'); return; }
     await handleResponse('call');
     Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Error', 'Unable to open dialer.'));
   };
 
   const whatsappRequester = async () => {
     const phone = getRequesterPhone();
-    if (!phone) { Alert.alert('No phone', 'Requester phone number is unavailable.'); return; }
+    if (!phone) { notify.info('No phone', 'Requester phone number is unavailable.'); return; }
     const text = encodeURIComponent('Hello, I can donate for your blood request.');
     const waUrl = `whatsapp://send?phone=${phone}&text=${text}`;
     const waWeb = `https://wa.me/${phone}?text=${text}`;
@@ -157,13 +158,13 @@ export default function RequestDetail() {
                   setSubmitting(true);
                   const res = await apiClient.fulfillRequest(id);
                   if (res?.success) {
-                    Alert.alert('Success', 'Request marked as Fulfilled successfully.');
+                    notify.success('Request marked as Fulfilled successfully.');
                     await load();
                   } else {
-                    Alert.alert('Error', 'Could not update status.');
+                    notify.error('Could not update status.');
                   }
                 } catch (e) {
-                  Alert.alert('Error', 'Could not update status.');
+                  notify.error('Could not update status.');
                 } finally {
                   setSubmitting(false);
                 }

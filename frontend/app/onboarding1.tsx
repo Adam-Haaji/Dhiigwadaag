@@ -96,8 +96,7 @@ const onboarding1 = () => {
  
       {/* Description */}
       <Text style={styles.description}>
-        sed quia non numquam eius modi tempora labore
-        et dolore magnam aliquam.
+        Donate blood and help save lives in your community.
       </Text>
 
       {/* Pagination Dots */}

@@ -92,12 +92,11 @@ const OnboardingScreen2 = () => {
       />
 
       {/* Title */}
-      <Text style={styles.title}>Save Lifes</Text>
+      <Text style={styles.title}>Request Blood</Text>
 
       {/* Description */}
       <Text style={styles.description}>
-        sed quia non numquam eius modi tempora labore
-        et dolore magnam aliquam.
+        Create a request quickly and reach nearby donors when you need help.
       </Text>
 
       {/* Pagination Dots */}

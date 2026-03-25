@@ -6,7 +6,7 @@
 import BloodRequest from '../models/BloodRequest.js';
 import { classify, extractBloodType } from '../utils/intentClassifier.js';
 import { LOCATIONS } from '../utils/locations.js';
-import { detectLanguage, getOpenAIChatCompletion, getFallbackResponse, explainBloodCompatibilityStatic, emergencyInstructionsStatic } from '../services/chatbotService.js';
+import { detectLanguage, getOpenAIChatCompletion, explainBloodCompatibilityStatic, emergencyInstructionsStatic } from '../services/chatbotService.js';
 import { findAvailableDonors, checkAvailability } from '../services/donorSearchService.js';
 
 function isDbOrNetworkError(err) {
@@ -111,13 +111,16 @@ async function executeTool(name, args, context) {
 const OFF_TOPIC_REPLY_EN = 'I can only help with blood donation requests and donors inside this app.';
 const OFF_TOPIC_REPLY_SO = 'Waxaan kaliya kaa caawin karaa codsiyada dhiigga iyo dhiibayaasha ee app-kan gudaheeda.';
 
-const ASK_DISTRICT_EN = 'To check donors near you, please tell me your district (e.g. Hodan, Wadajir).';
-const ASK_DISTRICT_SO = 'Si aan u hubiyo donor-ada, fadlan ii sheeg degmada aad joogto (tusaale: Hodan, Wadajir).';
+const ASK_DISTRICT_EN = 'Please tell your district/location.';
+const ASK_DISTRICT_SO = 'Fadlan ii sheeg degmada/xaafadda (tusaale: Abdiaziz, Hodan, Shangani).';
 
-const ASK_BLOOD_AND_DISTRICT_EN = 'Please tell me which blood type you need (e.g. A+, O-) and which district you are in.';
-const ASK_BLOOD_AND_DISTRICT_SO = 'Fadlan ii sheeg nooca dhiigga aad u baahan tahay (tusaale: A+, O-) iyo degmada aad joogto.';
+const ASK_BLOOD_EN = 'Please tell me the blood group (O+, A-, B+, AB+).';
+const ASK_BLOOD_SO = 'Fadlan ii sheeg blood group-ka (O+, A-, B+, AB- iwm).';
 
-/** GET /api/chatbot/availability — availability only, no donor data. On DB failure returns available: false, status: DB_UNAVAILABLE. */
+const GREETING_REPLY_SO = 'Waad salaamantahay 👋 Sideen kuu caawin karaa? Blood group kee baad u baahan tahay?';
+const GREETING_REPLY_EN = 'Hello 👋 How can I help? Which blood group do you need?';
+
+/** GET /api/chatbot/availability — minimal: { available, resolvedDistrict, status }. No donor list. */
 export const availability = async (req, res) => {
   try {
     const userId = req?.user?.id || req?.user?._id;
@@ -134,24 +137,23 @@ export const availability = async (req, res) => {
     const data = await checkAvailability(bloodType, district, urgency);
     if (data.available) {
       return res.json({
-        bloodType: data.bloodType,
-        requestedDistrict: data.requestedDistrict,
-        matchedDistrict: data.matchedDistrict,
         available: true,
-        district: data.matchedDistrict,
+        resolvedDistrict: data.matchedDistrict || data.requestedDistrict || district,
+        status: 'OK',
       });
     }
     return res.json({
-      bloodType: data.bloodType,
-      requestedDistrict: data.requestedDistrict,
-      searchedDistricts: data.searchedDistricts,
       available: false,
-      district: data.requestedDistrict,
+      resolvedDistrict: data.requestedDistrict || district || '',
+      status: 'NOT_FOUND',
     });
   } catch (err) {
     if (isDbOrNetworkError(err)) {
-      const district = req.query.district || '';
-      return res.status(200).json({ available: false, status: 'DB_UNAVAILABLE', district: district || null });
+      return res.status(200).json({
+        available: false,
+        resolvedDistrict: req.query.district || '',
+        status: 'DB_UNAVAILABLE',
+      });
     }
     return res.status(500).json({ error: err?.message || 'Server error' });
   }
@@ -217,9 +219,27 @@ export const chat = async (req, res) => {
       (districtFromMessage && bloodTypeFromHistory) ||
       (bloodTypeFromMessage && districtFromHistory);
 
+    if (intent === 'GREETING') {
+      return res.json({
+        reply: isSomali ? GREETING_REPLY_SO : GREETING_REPLY_EN,
+        source: 'intent',
+        toolUsed: null,
+      });
+    }
+
     if (intent === 'OFF_TOPIC' && !runAvailability) {
       return res.json({
         reply: isSomali ? OFF_TOPIC_REPLY_SO : OFF_TOPIC_REPLY_EN,
+        source: 'intent',
+        toolUsed: null,
+      });
+    }
+
+    if (intent === 'CREATE_REQUEST_GUIDE') {
+      const requestGuideEn = 'Go to the Request tab → tap Create Request → fill the form. The system will match you with a suitable donor.';
+      const requestGuideSo = 'Tag Request tab → dooro Create Request → buuxi form-ka. Markaas system-ka ayaa kuugu match gareynaya donor ku habboon.';
+      return res.json({
+        reply: isSomali ? requestGuideSo : requestGuideEn,
         source: 'intent',
         toolUsed: null,
       });
@@ -231,7 +251,7 @@ export const chat = async (req, res) => {
 
       if (!bloodType) {
         return res.json({
-          reply: isSomali ? ASK_BLOOD_AND_DISTRICT_SO : ASK_BLOOD_AND_DISTRICT_EN,
+          reply: isSomali ? ASK_BLOOD_SO : ASK_BLOOD_EN,
           source: 'intent',
           toolUsed: null,
         });
@@ -254,7 +274,7 @@ export const chat = async (req, res) => {
           const dbUnavailableSo = 'Hubinta diyaar gelinta way suurtagal ma noqon. Fadlan isku day mar kale.';
           return res.status(200).json({
             reply: isSomali ? dbUnavailableSo : dbUnavailableEn,
-            source: 'fallback',
+            source: 'intent',
             status: 'DB_UNAVAILABLE',
             toolUsed: null,
           });
@@ -262,21 +282,32 @@ export const chat = async (req, res) => {
         throw err;
       }
 
-      const districtLabel = data.requestedDistrict || district;
-      const districtList = data.searchedDistricts?.length ? data.searchedDistricts.join(', ') : districtLabel;
+      const userDistrict = data.requestedDistrict || district;
+      const matchedDistrictLabel = data.matchedDistrict || userDistrict;
+      const foundInOtherDistrict = data.available && data.matchedDistrict && data.requestedDistrict && data.matchedDistrict !== data.requestedDistrict;
+      const guideSo = 'Fadlan tag Request tab oo dir request si aad u hesho donor-ka.';
+      const guideEn = 'Please go to the Request tab and submit a request to get matched with a donor.';
       let reply;
 
       if (data.available) {
-        if (isSomali) {
-          reply = `✅ Dhiig ${data.bloodType} waa diyaar ${districtLabel}. Fadlan samee codsi si loo kuu xiro.`;
+        if (foundInOtherDistrict) {
+          if (isSomali) {
+            reply = `❌ ${data.bloodType} lagama helin degmada ${userDistrict}.\n✅ Waxaa lagaaga helay ${matchedDistrictLabel} oo daris kula ah.\n\n${guideSo}`;
+          } else {
+            reply = `❌ ${data.bloodType} was not found in ${userDistrict}.\n✅ It is available in ${matchedDistrictLabel} (nearby).\n\n${guideEn}`;
+          }
         } else {
-          reply = `✅ ${data.bloodType} blood is available in ${districtLabel}. Please create a request to get matched.`;
+          if (isSomali) {
+            reply = `✅ Haa, ${data.bloodType} waa available degmada ${matchedDistrictLabel}.\n\n${guideSo}`;
+          } else {
+            reply = `✅ Yes, ${data.bloodType} is available in ${matchedDistrictLabel}.\n\n${guideEn}`;
+          }
         }
       } else {
         if (isSomali) {
-          reply = `❌ Ma helin dhiibayaal ${data.bloodType} ah ${districtLabel} ama degmooyinka u dhow. Waad sameyn kartaa codsi degdeg ah, nidaamku wuu sii raadin doonaa.`;
+          reply = `❌ ${data.bloodType} hadda kama available aha gudaha app-ka.`;
         } else {
-          reply = `❌ No ${data.bloodType} donors found in ${districtLabel} or nearby districts. You can create an emergency request and we will continue searching.`;
+          reply = `❌ ${data.bloodType} is currently not available in the app.`;
         }
       }
 
@@ -297,22 +328,11 @@ export const chat = async (req, res) => {
 
     let completion = await getOpenAIChatCompletion(messages, { tools: true });
 
-    if (!completion.success && completion.useFallback) {
-      const fallbackText = getFallbackResponse(userMessage, context);
-      if (process.env.NODE_ENV !== 'test') {
-        console.log('[Chatbot] Fallback used:', completion.error);
-      }
-      return res.json({
-        reply: fallbackText,
-        source: 'fallback',
-        toolUsed: null,
-      });
-    }
-
     if (!completion.success) {
+      const isKeyMissing = completion.error === 'OPENAI_API_KEY not set';
       return res.json({
-        reply: getFallbackResponse(userMessage, context),
-        source: 'fallback',
+        reply: isKeyMissing ? 'Chat service temporarily unavailable.' : 'Service is temporarily unavailable. Please try again.',
+        source: 'openai',
         toolUsed: null,
       });
     }
@@ -343,7 +363,7 @@ export const chat = async (req, res) => {
     }
 
     return res.json({
-      reply: assistantText || getFallbackResponse(userMessage, context),
+      reply: assistantText || 'Service is temporarily unavailable. Please try again.',
       source: 'openai',
       toolUsed,
     });
@@ -353,14 +373,14 @@ export const chat = async (req, res) => {
     if (isDbOrNetworkError(err)) {
       return res.json({
         reply: 'Eligibility check unavailable. Please try again.',
-        source: 'fallback',
+        source: 'openai',
         status: 'DB_UNAVAILABLE',
         toolUsed: null,
       });
     }
     return res.json({
-      reply: getFallbackResponse(userMessage, {}),
-      source: 'fallback',
+      reply: 'Service is temporarily unavailable. Please try again.',
+      source: 'openai',
       toolUsed: null,
     });
   }

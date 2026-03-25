@@ -1,8 +1,10 @@
 /**
- * Chatbot Service — Hybrid AI + Tools + Fallback
- * Handles OpenAI calls, tool routing, language detection, and rule-based fallback.
- * API key must be set in backend env only (OPENAI_API_KEY).
+ * Chatbot Service — OpenAI only (no fallback when key is set).
+ * Handles OpenAI calls via openaiClient, language detection for Somali + English.
+ * API key: process.env.OPENAI_API_KEY (backend .env only).
  */
+
+import getOpenAIClient from './openaiClient.js';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -18,17 +20,13 @@ const BLOOD_COMPATIBILITY = {
 };
 
 const SYSTEM_PROMPT = `You are a Blood Donation Assistant inside a mobile app.
-You only answer questions related to:
-- Blood requests
-- Donor availability
-- Emergency blood guidance
-- Blood compatibility (only if explicitly asked)
+You ONLY assist with: blood donation, donor availability, blood compatibility, and emergency blood guidance.
+Respond in the same language as the user (Somali or English). Be concise and professional.
 
-You must never invent donors.
-For availability questions, wait for tool data.
-If no data provided, ask for district.
-Respond in the same language as the user.
-Be concise and professional.`;
+Rules:
+- If the user says a greeting (e.g. hi, hello, asc, setahay, salaam): respond with a short friendly greeting and offer help with blood requests or donor availability.
+- If the question is unrelated to blood donation or emergency requests: respond exactly: "I can only assist with blood donation and emergency requests."
+- Never invent donors. For availability questions, use tool data; if no data, ask for district.`;
 
 const TOOL_DEFINITIONS = [
   {
@@ -132,7 +130,7 @@ export function getFallbackResponse(userMessage, context = {}) {
 
   if (/create|request|samee|codsiga|need blood|waan u baahan dhiig/i.test(msg)) {
     return en(
-      'Si aad u sameysato codsiga: tag "Emergency Alert" ama "Search", buuxi nooca dhiiga, goobta, tirada unugga, iyo telefoonka. Haddii aad rabto waxaan kaa caawin karaa adoo sheegaya macluumaadka.',
+      'Si aad u sameysato codsiga: tag "Create Request" ama "Search", buuxi nooca dhiiga, goobta, tirada unugga, iyo telefoonka. Haddii aad rabto waxaan kaa caawin karaa adoo sheegaya macluumaadka.',
       'To create a request: go to "Emergency Alert" or "Search", fill blood type, location, units, and phone. If you tell me the details I can guide you step by step.'
     );
   }
@@ -175,42 +173,26 @@ export function emergencyInstructionsStatic() {
 }
 
 export async function getOpenAIChatCompletion(messages, options = {}) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: 'OPENAI_API_KEY not set', useFallback: true };
+  const client = getOpenAIClient();
+  if (!client) {
+    return { success: false, error: 'OPENAI_API_KEY not set' };
   }
 
   const model = options.model || 'gpt-4o-mini';
   const useTools = options.tools !== false;
-  const body = {
-    model,
-    messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-    max_tokens: 600,
-    temperature: 0.3,
-  };
-  if (useTools) body.tools = TOOL_DEFINITIONS;
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
+    const params = {
+      model,
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      max_tokens: 600,
+      temperature: 0.3,
+    };
+    if (useTools) params.tools = TOOL_DEFINITIONS;
 
-    if (!res.ok) {
-      const err = data?.error?.message || data?.error?.code || res.statusText;
-      if (res.status === 429 || /rate limit/i.test(String(err))) {
-        return { success: false, error: err, useFallback: true };
-      }
-      return { success: false, error: err, useFallback: true };
-    }
-
-    const choice = data?.choices?.[0];
-    if (!choice) return { success: false, error: 'No choice', useFallback: true };
+    const completion = await client.chat.completions.create(params);
+    const choice = completion?.choices?.[0];
+    if (!choice) return { success: false, error: 'No choice' };
 
     const text = choice?.message?.content?.trim();
     const toolCalls = choice?.message?.tool_calls;
@@ -223,11 +205,7 @@ export async function getOpenAIChatCompletion(messages, options = {}) {
     };
   } catch (err) {
     const msg = err?.message || String(err);
-    return {
-      success: false,
-      error: msg,
-      useFallback: true,
-    };
+    return { success: false, error: msg };
   }
 }
 

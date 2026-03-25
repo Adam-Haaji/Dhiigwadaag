@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import colorsBase, { semanticColors, spacing, typography, elevation } from '@/constants/colors';
+import colorsBase, { semanticColors, spacing, typography, elevation, radii } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import api, { Donor } from "../service/api";
 import useAuth from '@/hooks/useAuth';
@@ -99,6 +99,7 @@ export default function EmergencyRequest() {
 
   const styles = useMemo(() => {
     const softAccent = isDark ? semanticColors.bgElevated : colorsBase.palette.brandSoft;
+    const badgeBorder = isDark ? semanticColors.borderSubtle : colorsBase.palette.dangerLight;
 
     return StyleSheet.create({
       container: {
@@ -247,23 +248,24 @@ export default function EmergencyRequest() {
       },
       sectionTitle: {
         ...typography.h3,
-        fontWeight: '600',
+        fontWeight: '700',
         color: semanticColors.textPrimary,
+        marginTop: spacing.md,
         marginBottom: spacing.md,
-        marginHorizontal: spacing.lg,
+        textAlign: 'center',
         letterSpacing: -0.2,
       },
       donorCard: {
         backgroundColor: semanticColors.bgSurface,
-        borderRadius: 20,
-        padding: spacing.lg,
+        borderRadius: radii.xl,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
         marginBottom: spacing.md,
-        marginHorizontal: spacing.lg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
+        borderWidth: 0,
+        ...elevation.sm,
       },
       donorInfo: {
         flexDirection: 'row',
@@ -271,19 +273,14 @@ export default function EmergencyRequest() {
         flex: 1,
       },
       donorAvatar: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         backgroundColor: softAccent,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: spacing.md,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
-      },
-      donorAvatarText: {
-        ...typography.h3,
-        fontWeight: '700',
+        borderWidth: 0,
       },
       donorDetails: {
         flex: 1,
@@ -292,32 +289,35 @@ export default function EmergencyRequest() {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: spacing.sm,
+        marginBottom: spacing.xs,
       },
       donorName: {
-        ...typography.body,
-        fontWeight: '600',
+        ...typography.h4,
+        fontWeight: '800',
         color: semanticColors.textPrimary,
         flex: 1,
-        fontSize: 17,
       },
       bloodTypeBadge: {
-        backgroundColor: semanticColors.bgElevated,
+        backgroundColor: 'transparent',
         paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.xs,
-        borderRadius: 10,
+        paddingVertical: 6,
+        borderRadius: radii.md,
         borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
+        borderColor: badgeBorder,
+        minWidth: 44,
+        alignItems: 'center',
       },
       bloodTypeText: {
         color: semanticColors.textPrimary,
-        ...typography.caption,
-        fontWeight: '700',
+        ...typography.labelSmall,
+        fontWeight: '800',
       },
       donorMeta: {
         flexDirection: 'row',
-        marginBottom: 4,
-        gap: 16,
+        flexWrap: 'wrap',
+        marginBottom: 2,
+        columnGap: 14,
+        rowGap: 6,
       },
       metaItem: {
         flexDirection: 'row',
@@ -335,18 +335,20 @@ export default function EmergencyRequest() {
       contactButton: {
         backgroundColor: colorsBase.palette.brandSoft,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        borderRadius: 12,
+        paddingVertical: 10,
+        borderRadius: radii.md,
+        borderWidth: 0,
       },
       contactButtonDisabled: {
-        backgroundColor: semanticColors.bgElevated,
+        backgroundColor: semanticColors.bgAlt,
+        borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
-        opacity: 0.7,
+        opacity: 1,
       },
       contactButtonText: {
-        color: semanticColors.textInverse,
+        color: semanticColors.textPrimary,
         ...typography.label,
-        fontWeight: '600',
+        fontWeight: '800',
       },
       contactButtonTextDisabled: {
         color: semanticColors.textSecondary,
@@ -492,16 +494,18 @@ export default function EmergencyRequest() {
         contentContainerStyle={styles.donorsContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.sectionTitle}>Available Donors ({availableDonors.length})</Text>
-          {loading && <ActivityIndicator color={semanticColors.interactivePrimary} />}
-        </View>
+        <Text style={styles.sectionTitle}>Available Donors</Text>
+        {loading && (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+            <ActivityIndicator color={semanticColors.interactivePrimary} />
+          </View>
+        )}
 
         {availableDonors.map((donor) => (
           <View key={donor._id} style={styles.donorCard}>
             <View style={styles.donorInfo}>
               <View style={styles.donorAvatar}>
-                <Text style={styles.donorAvatarText}>🩸</Text>
+                <IconSymbol name="drop.fill" size={18} color={colorsBase.palette.brand} />
               </View>
               
               <View style={styles.donorDetails}>
@@ -542,16 +546,12 @@ export default function EmergencyRequest() {
         ))}
         
         {/* Unavailable donors section */}
-        {unavailableDonors.length > 0 && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={styles.sectionTitle}>Unavailable Donors ({unavailableDonors.length})</Text>
-          </View>
-        )}
+        {unavailableDonors.length > 0 && <Text style={styles.sectionTitle}>Unavailable Donors</Text>}
         {unavailableDonors.map((donor) => (
           <View key={donor._id} style={styles.donorCard}>
             <View style={styles.donorInfo}>
               <View style={styles.donorAvatar}>
-                <Text style={styles.donorAvatarText}>🩸</Text>
+                <IconSymbol name="drop.fill" size={18} color={colorsBase.palette.brand} />
               </View>
               <View style={styles.donorDetails}>
                 <View style={styles.donorHeader}>

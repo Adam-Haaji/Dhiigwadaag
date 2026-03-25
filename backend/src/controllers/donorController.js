@@ -14,6 +14,21 @@ function computeMenus(role) {
   return ['home'];
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function toUtcStartOfDay(input) {
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+// Compute cooldown end-date from last donation date (+90 days) at UTC day precision.
+function computeNextAvailableDate(lastDonationDate) {
+  const start = toUtcStartOfDay(lastDonationDate);
+  if (!start) return null;
+  return new Date(start.getTime() + 90 * DAY_MS);
+}
+
 // Map app donor fields to ML API payload (exact keys required by eligibility-api)
 // Use sensible defaults so the model never receives null/zero for required numerics
 function mapDonorToEligibilityPayload(donor, hb, totalDonations) {
@@ -128,6 +143,23 @@ async function checkDonorEligibility(donorData, totalDonations = 0) {
     if (error?.message && !error.message.includes('aborted')) {
       console.error('[checkDonorEligibility] API error:', error.message);
     }
+    // Fallback to rule-based eligibility when ML API fails (e.g. fetch failed, timeout, service down)
+    try {
+      const ruleResult = evaluateEligibility({
+        age: donorData.age,
+        weightKg: donorData.weightKg,
+        gender: donorData.gender,
+        hb: donorData.hb,
+        lastDonationDate: donorData.lastDonationDate ?? undefined,
+      });
+      return {
+        eligible: ruleResult.eligible,
+        reason: ruleResult.reason || (ruleResult.eligible ? 'Eligible to donate' : 'Not eligible to donate'),
+        confidencePercent: ruleResult.eligible !== undefined ? 100 : null,
+      };
+    } catch (_) {
+      // ignore rule eval errors
+    }
     return {
       eligible: null,
       reason: 'Eligibility check unavailable. Please try again.',
@@ -164,6 +196,7 @@ export const createDonor = async (req, res) => {
       consentGiven,
       emergencyContact,
       lastDonationDate,
+      donatedBefore,
       medicalCondition,
       availabilityStatus,
       donations,
@@ -174,11 +207,25 @@ export const createDonor = async (req, res) => {
         weightKg === undefined || consentGiven === undefined || !emergencyContact || !availabilityStatus) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    // New donor registration: never set lastDonationDate/unavailableUntil; only set on Fulfilled
-    const lastDonationDateForCreate = null;
+    const donatedBeforeFlag = donatedBefore === true;
+    const lastDonationUtc = donatedBeforeFlag ? toUtcStartOfDay(lastDonationDate) : null;
+    if (donatedBeforeFlag && !lastDonationUtc) {
+      return res.status(400).json({ success: false, message: 'Last donation date is required when donatedBefore is true.' });
+    }
+
+    const nextAvailableDate = donatedBeforeFlag ? computeNextAvailableDate(lastDonationUtc) : null;
+    const todayUtc = toUtcStartOfDay(new Date());
+    const withinCooldown = Boolean(nextAvailableDate && todayUtc && (todayUtc.getTime() < nextAvailableDate.getTime()));
+    const cooldownReason = withinCooldown
+      ? `Not eligible yet. You can donate again on ${nextAvailableDate.toISOString().slice(0, 10)}.`
+      : null;
+
+    // Preserve submitted lastDonationDate when donor reports previous donation.
+    const lastDonationDateForCreate = lastDonationUtc;
     // Derived age
     const age = yearsBetween(dateOfBirth);
     // Run eligibility (createDonor path: user already passed client validation; we enforce again server-side)
+    // Keep existing non-cooldown eligibility rules unchanged; cooldown is handled above with UTC-safe dates.
     const elig = evaluateEligibility({ age, weightKg, gender, hb: req.body?.hb, lastDonationDate: null });
     if (!elig.eligible) {
       // Do not modify users collection; just log eligibility result and return
@@ -209,10 +256,7 @@ export const createDonor = async (req, res) => {
       }
     }
 
-    // CRITICAL: Always set availabilityStatus to 'available' for new donor registrations
-// Donors only become 'unavailable' after fulfilling a donation (90-day cooldown)
-// This applies to both new donors and requester-to-donor conversions
-const donor = await Donor.create({
+    const donor = await Donor.create({
       user: userId,
       fullName,
       dateOfBirth,
@@ -226,8 +270,10 @@ const donor = await Donor.create({
       emergencyContact,
       lastDonationDate: lastDonationDateForCreate,
       medicalCondition: medicalCondition || 'None', // Default to 'None' if not provided
-      availabilityStatus: 'available', // Always 'available' on registration; only Fulfilled sets unavailable
-      nextAvailableDate: null,
+      availabilityStatus: withinCooldown ? 'unavailable' : 'available',
+      nextAvailableDate: withinCooldown ? nextAvailableDate : null,
+      eligibilityStatus: withinCooldown ? 'NOT_ELIGIBLE' : 'pending',
+      eligibilityReason: cooldownReason,
       donations: Array.isArray(donations) ? donations : [],
     });
 
@@ -236,7 +282,8 @@ const donor = await Donor.create({
     const donorDoc = donor;
     const userIdForDonations = userId;
     const hbVal = req.body?.hb != null && req.body?.hb !== '' ? Number(req.body.hb) : undefined;
-    setImmediate(async () => {
+    if (!withinCooldown) {
+      setImmediate(async () => {
       try {
         const donorWithAge = await Donor.findById(donorId).lean();
         const finalAge = donorWithAge?.age || donorDoc.age;
@@ -267,7 +314,8 @@ const donor = await Donor.create({
           eligibilityCheckedAt: new Date(),
         }).catch(() => {});
       }
-    });
+      });
+    }
 
     // Do not modify users collection; record eligibility log only
     try {
@@ -276,7 +324,17 @@ const donor = await Donor.create({
         donor: donor?._id,
         decision: 'eligible',
         reason: null,
-        checkResults: { age, weightKg, gender, hb: req.body?.hb, cooldown: { withinCooldown: false } },
+        checkResults: {
+          age,
+          weightKg,
+          gender,
+          hb: req.body?.hb,
+          cooldown: {
+            lastDonationDate: lastDonationDateForCreate,
+            nextEligibleDate: nextAvailableDate,
+            withinCooldown,
+          },
+        },
       }).catch(()=>{});
     } catch (e) {
       console.error('Eligibility log insert failed:', e?.message || e);
@@ -302,7 +360,8 @@ const donor = await Donor.create({
     // Return immediately; eligibility is written in background (dashboard reads from DB)
     return res.status(201).json({
       donor,
-      user: summary
+      user: summary,
+      ...(withinCooldown ? { message: cooldownReason } : {}),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

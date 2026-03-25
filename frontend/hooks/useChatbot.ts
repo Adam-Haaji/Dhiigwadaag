@@ -22,6 +22,8 @@ export function useChatbot() {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    const serviceUnavailable = 'Service temporarily unavailable. Please try again.';
+    const dbUnavailable = 'Eligibility check unavailable. Please try again.';
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       const res = await api.chatbotChat({ message: trimmed, history });
@@ -29,15 +31,10 @@ export function useChatbot() {
       const reply =
         data?.reply ??
         data?.message ??
-        (data?.status === 'DB_UNAVAILABLE' ? 'Eligibility check unavailable. Please try again.' : "I couldn't process that. Please try again or use the app menus.");
+        (data?.status === 'DB_UNAVAILABLE' ? dbUnavailable : serviceUnavailable);
       setMessages((prev) => [...prev, { role: 'assistant', content: reply, timestamp: new Date() }]);
     } catch (e: unknown) {
-      const raw = e instanceof Error ? e.message : String(e ?? '');
-      const friendly =
-        typeof raw === 'string' && (raw.trim().startsWith('{') || raw.includes('ENOTFOUND') || raw.includes('getaddrinfo'))
-          ? 'Eligibility check unavailable. Please try again.'
-          : raw || 'Something went wrong. You can still use "Emergency Alert" or "Search" in the app.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: friendly, timestamp: new Date() }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: serviceUnavailable, timestamp: new Date() }]);
     } finally {
       setLoading(false);
     }

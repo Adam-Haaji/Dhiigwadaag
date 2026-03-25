@@ -67,14 +67,14 @@ export default function HelpCenterScreen() {
           <Ionicons name="chevron-back" size={22} color={semanticColors.textPrimary} />
           <Text style={[styles.backText, { color: semanticColors.textPrimary }]}>Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: semanticColors.textPrimary }]}>Help Center</Text>
+        <Text style={[styles.headerTitle, { color: semanticColors.textPrimary }]}>About App</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerWrap}>
-          <Text style={[styles.title, { color: semanticColors.textPrimary }]}>Help Center</Text>
-          <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Find answers and tips for using the app</Text>
+          <Text style={[styles.title, { color: semanticColors.textPrimary }]}>About App</Text>
+          <Text style={[styles.subtitle, { color: semanticColors.textSecondary }]}>Learn more about the app and its features</Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle }]}>

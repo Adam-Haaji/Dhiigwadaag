@@ -59,8 +59,9 @@ function normalizeDistrict(input) {
 }
 
 /**
- * Build filter for "available" donors: schema uses availabilityStatus (string 'available'),
- * and cooldown is reflected in isActive / nextAvailableDate. Include donors where cooldown expired.
+ * Strict availability filter per real Donor schema. A donor is AVAILABLE only if ALL are true:
+ * bloodGroup match, district match (case-insensitive), availabilityStatus = "available",
+ * isActive = true, nextAvailableDate <= today (or not set).
  */
 function availableDonorFilter(bloodGroupCanonical, districtCanonical) {
   const now = new Date();
@@ -68,13 +69,12 @@ function availableDonorFilter(bloodGroupCanonical, districtCanonical) {
     bloodGroup: bloodGroupCanonical,
     district: { $regex: new RegExp('^' + escapeRegex(districtCanonical) + '$', 'i') },
     availabilityStatus: 'available',
+    isActive: true,
     $or: [
-      { isActive: true },
       { nextAvailableDate: { $exists: false } },
       { nextAvailableDate: null },
       { nextAvailableDate: { $lte: now } },
     ],
-    eligibilityStatus: { $in: ['ELIGIBLE', 'eligible'] },
   };
 }
 
@@ -168,4 +168,58 @@ export async function findAvailableDonors(bloodType, district, urgency = 'normal
   }));
 
   return out;
+}
+
+/**
+ * For chatbot: same strict availability rules, returns up to 3 donors with fullName + phone.
+ * Uses same district expansion (requested district first, then DISTRICT_PRIORITY nearby).
+ */
+export async function getAvailableDonorsForChat(bloodType, district, urgency = 'normal') {
+  const bt = normalizeBloodType(bloodType);
+  const requestedDistrict = normalizeDistrict(district);
+  const expansion = getDistrictExpansionOrder(requestedDistrict || String(district || '').trim(), urgency);
+  const searchedDistricts = [];
+
+  if (!bt || !BLOOD_GROUPS.includes(bt)) {
+    return {
+      bloodType: bt || '',
+      requestedDistrict: requestedDistrict || district || null,
+      matchedDistrict: null,
+      available: false,
+      donors: [],
+      searchedDistricts: [],
+    };
+  }
+
+  for (const d of expansion) {
+    searchedDistricts.push(d);
+    const filter = availableDonorFilter(bt, d);
+    const list = await Donor.find(filter)
+      .select('fullName phone district bloodGroup')
+      .limit(3)
+      .lean();
+
+    if (list.length > 0) {
+      return {
+        bloodType: bt,
+        requestedDistrict: requestedDistrict || district || null,
+        matchedDistrict: d,
+        available: true,
+        donors: list.map((doc) => ({
+          fullName: doc.fullName || '',
+          phone: doc.phone || '',
+        })),
+        searchedDistricts,
+      };
+    }
+  }
+
+  return {
+    bloodType: bt,
+    requestedDistrict: requestedDistrict || district || null,
+    matchedDistrict: null,
+    available: false,
+    donors: [],
+    searchedDistricts,
+  };
 }

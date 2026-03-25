@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 dotenv.config();
-import connectDB, { isDBReady } from './config/db.js';
+import { isDBReady, isUsingMemoryDB } from './config/db.js';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -20,6 +20,7 @@ import startExpiryScheduler from './scheduler/expireRequests.js';
 
 import priorityRoutes from './routes/priority.js';
 import adminRoutes from './routes/admin.js';
+import adminReportsRoutes from './routes/adminReports.js';
 import eligibilityRoutes from './routes/eligibility.js';
 import chatbotRoutes from './routes/chatbot.js';
 const app = express();
@@ -27,8 +28,14 @@ const app = express();
 app.use(cors({ origin: '*'}));
 app.use(express.json());
 
-// Connect to MongoDB Atlas
-connectDB();
+// If DB is temporarily unavailable, fail fast with 503 instead of letting requests hang.
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/api/health') return next();
+  if (req.path.startsWith('/api') && !isDBReady()) {
+    return res.status(503).json({ error: 'db_unavailable', message: 'Database connection is not ready. Please retry.' });
+  }
+  return next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -43,6 +50,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api', priorityRoutes);
 app.use('/api/requesters', requesterRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/eligibility', eligibilityRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 
@@ -52,7 +60,12 @@ app.get('/', (req, res) => {
 
 // Lightweight health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    dbReady: isDBReady(),
+    usingMemoryDB: isUsingMemoryDB(),
+  });
 });
 
 export default app;

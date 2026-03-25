@@ -11,10 +11,12 @@ import { useTheme } from '@/context/ThemeContext';
 import useAuth from '@/hooks/useAuth';
 import api from '@/service/api';
 import HeaderBanner from '@/components/HeaderBanner';
-import { setHomeModePreference } from '@/service/homeMode';
+import { useRoleMode } from '@/context/RoleModeContext';
+import { goToMatchedRequests } from '@/service/matchedRequestsNavigation';
 
 export default function DonorDashboard() {
   const { user, setUser } = useAuth();
+  const { role: derivedRole, setActiveMode, markHasRequesterRecord } = useRoleMode();
   const { isDark } = useTheme();
   const [switching, setSwitching] = useState(false);
   const [hasDonorRecord, setHasDonorRecord] = useState(false);
@@ -121,53 +123,50 @@ export default function DonorDashboard() {
   }, [donorProfile?.lastDonationDate, history, lastDonationDate]);
 
   const handleViewMatches = async () => {
-    try {
-      const matches: any[] = await api.listMyMatches();
-      if (Array.isArray(matches) && matches.length > 0) {
-        const topId = String(matches[0]._id);
-        router.push({ pathname: '/matchedRequestDetail', params: { id: topId, mode: 'donor' } });
-        return;
-      }
-    } catch {}
-    router.push({ pathname: '/(home)/notification', params: { openLatestRequest: '1' } });
+    await goToMatchedRequests(role);
   };
   const handleSwitchToRequester = async () => {
     if (switching) return;
     setSwitching(true);
     try {
-      await setHomeModePreference('requester');
-      // Check if requester record already exists
+      await setActiveMode('requester');
       let requesterData;
       try {
         requesterData = await api.requesterMe();
       } catch {}
-      
-      // If no requester record exists, create one
-      // This creates a requester record WITHOUT changing user.role
-      // User remains a donor AND becomes a requester (dual-role)
+
+      if (derivedRole === 'both' && requesterData?.exists) {
+        markHasRequesterRecord();
+        router.replace('/(home)/request');
+        return;
+      }
+
       if (!requesterData?.exists) {
         requesterData = await api.requesterRegister();
       }
-      
-      // Update user profile if returned (works for both existing and newly created records)
-      if (requesterData?.user) {
-        const token = user?.token;
-        await setUser({ 
-          token, 
-          user: { 
-            ...user?.user, 
-            email: requesterData.user.email,
-            phone: requesterData.user.phone,
-            name: requesterData.user.name,
-          } 
-        });
+
+      if (requesterData?.exists || requesterData?.requester || requesterData?.user) {
+        markHasRequesterRecord();
       }
-      
-      // Navigate to requester dashboard
-      // Both Donor and Requester tabs will be visible (dual-role user)
+
+      const token = user?.token;
+      const { setNavigatorRole } = await import('@/service/homeMode');
+      await setNavigatorRole('both');
+      await setUser({
+        token,
+        user: {
+          ...user?.user,
+          role: 'both',
+          email: requesterData?.user?.email ?? user?.user?.email,
+          phone: requesterData?.user?.phone ?? user?.user?.phone,
+          name: requesterData?.user?.name ?? user?.user?.name,
+        },
+      });
       router.replace('/(home)/request');
     } catch (e) {
-      // If error, still try to navigate (user might already be a requester)
+      const { setNavigatorRole } = await import('@/service/homeMode');
+      await setNavigatorRole('both');
+      await setUser({ token: user?.token, user: { ...user?.user, role: 'both' } });
       router.replace('/(home)/request');
     } finally {
       setSwitching(false);

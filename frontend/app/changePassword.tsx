@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   Platform,
   ScrollView,
   Text,
@@ -17,6 +16,8 @@ import { useNavigation } from '@react-navigation/native';
 import { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import api from '@/service/api';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<any>();
@@ -48,13 +49,13 @@ export default function ChangePasswordScreen() {
     setSubmitting(true);
     try {
       await (api as any).changePassword({ oldPassword: oldPass, newPassword: newPass });
-      Alert.alert('Success', 'Password changed');
+      notify.success(MESSAGES.password.change.success.title, MESSAGES.password.change.success.body);
       setOldPass('');
       setNewPass('');
       setConfirmPass('');
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to change password');
+      notify.error(MESSAGES.password.change.fail.title, e?.message || MESSAGES.password.change.fail.body);
     } finally {
       setSubmitting(false);
     }

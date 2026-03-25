@@ -11,17 +11,19 @@ import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors, spacing, typography, elevation } from '@/constants/colors';
 import HeaderBanner from '@/components/HeaderBanner';
-import { setHomeModePreference } from '@/service/homeMode';
+import { useRoleMode } from '@/context/RoleModeContext';
 import { ChatbotButton, ChatbotPanel } from '@/components/chatbot';
 
 export default function RequestScreen() {
   const { user, setUser } = useAuth();
+  const { role: derivedRole, setActiveMode, markHasDonorRecord } = useRoleMode();
   const [hasRequesterRecord, setHasRequesterRecord] = useState(false);
   const [active, setActive] = useState<any[]>([]);
   const [past, setPast] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const { isDark } = useTheme();
 
   // Check if user has requester record
@@ -114,10 +116,35 @@ export default function RequestScreen() {
   // Donors auto-load logic removed; use Emergency Request screen for discovery
 
   const handleSwitchToDonor = () => {
-    // Navigate directly to donor registration form
-    // The form will check if donor exists and redirect accordingly
-    setHomeModePreference('donor');
-    router.push('/donorRegistration');
+    if (switching) return;
+    setSwitching(true);
+    (async () => {
+      try {
+        await setActiveMode('donor');
+        const donorData = await api.donorMe();
+        if (derivedRole === 'both' && donorData?.exists) {
+          markHasDonorRecord();
+          const { setNavigatorRole } = await import('@/service/homeMode');
+          await setNavigatorRole('both');
+          await setUser({ token: user?.token, user: { ...user?.user, role: 'both' } });
+          router.replace('/(home)/donor');
+          return;
+        }
+        if (donorData?.exists) {
+          markHasDonorRecord();
+          const { setNavigatorRole } = await import('@/service/homeMode');
+          await setNavigatorRole('both');
+          await setUser({ token: user?.token, user: { ...user?.user, role: 'both' } });
+          router.replace('/(home)/donor');
+          return;
+        }
+        router.push('/donorRegistration');
+      } catch {
+        router.push('/donorRegistration');
+      } finally {
+        setSwitching(false);
+      }
+    })();
   };
 
 

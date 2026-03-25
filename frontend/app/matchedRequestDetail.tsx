@@ -8,6 +8,7 @@ import colorsBase, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
 import api from '@/service/api';
 import useAuth from '@/hooks/useAuth';
+import { notify } from '@/ui/feedback/notify';
 
 export default function MatchedRequestDetail() {
   const { id, mode, donorId: donorIdParam } = useLocalSearchParams<{ id: string; mode?: 'donor'|'requester'; donorId?: string }>();
@@ -330,9 +331,9 @@ export default function MatchedRequestDetail() {
         const token = user?.token;
         if (me && setUser) await setUser({ token, user: me });
       } catch {}
-      Alert.alert('Accepted', 'You accepted this request. Please proceed to donate.');
+      notify.success('Accepted', 'You accepted this request. Please proceed to donate.');
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Could not accept');
+      notify.error('Error', e?.message || 'Could not accept');
     } finally {
       setActing(null);
     }
@@ -372,10 +373,10 @@ export default function MatchedRequestDetail() {
                 // Decline always goes through Requests API
                 await api.declineDonation(String(id));
             await load();
-            Alert.alert('Declined', 'You declined this request. We will try to rematch the requester.');
+            notify.info('Declined', 'You declined this request. We will try to rematch the requester.');
             router.replace('/donorMatches');
           } catch (e: any) {
-            Alert.alert('Error', e?.message || 'Could not decline');
+            notify.error('Error', e?.message || 'Could not decline');
           } finally {
             setDeclining(false);
           }

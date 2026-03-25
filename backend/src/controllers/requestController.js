@@ -6,6 +6,7 @@ import Donor from '../models/Donor.js';
 import { evaluateEligibility } from '../utils/eligibility.js';
 import { getDistrictExpansionOrder } from '../utils/districtNeighbors.js';
 import { isValidLocation } from '../utils/locations.js';
+import { createNotificationOnce, filterNewNotifications } from '../utils/notificationHelper.js';
 
 const pickMatchedDonorContact = async (doc) => {
   // Legacy Request: matchedDonorId is typically User._id; sometimes it may be a Donor._id
@@ -611,14 +612,15 @@ export const respondToRequest = async (req, res) => {
       if (doc.requesterId) {
         const requesterUserId = typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId;
         if (method === 'donate') {
-          await Notification.create({
+          await createNotificationOnce(Notification, {
             userId: requesterUserId,
-            title: 'Request Fulfilled',
-            message: `Your blood request has been fulfilled successfully${donorId ? ' by a donor' : ''}.`,
+            title: 'Request fulfilled',
+            message: 'Request fulfilled',
             type: 'request',
             urgent: false,
             meta: {
-              type: 'REQUEST_FULFILLED',
+              type: 'FULFILLED',
+              audience: 'requester',
               requestId: doc._id,
               matchId: doc._id,
               donorId: donorId || null,
@@ -779,15 +781,16 @@ export const markFulfilled = async (req, res) => {
             }
           }
         }
-        
+
         notifications.push({
           userId: requesterUserId,
-          title: 'Request Fulfilled',
-          message: `Your request for ${doc.bloodType} has been fulfilled${donorDetails.donorName || actingDonor?.fullName || ' by a donor'}. Thank you!`,
+          title: 'Request fulfilled',
+          message: 'Request fulfilled',
           type: 'request',
           urgent: false,
           meta: {
-            type: 'REQUEST_FULFILLED',
+            type: 'FULFILLED',
+            audience: 'requester',
             requestId: doc._id,
             matchId: doc._id,
             donorId: actingDonor?._id || (doc.fulfilledBy && (doc.fulfilledBy._id || doc.fulfilledBy)) || null,
@@ -809,12 +812,13 @@ export const markFulfilled = async (req, res) => {
               message: 'The blood request you responded to has been fulfilled. Thank you for your support!',
               type: 'request',
               urgent: false,
-              meta: { requestId: doc._id, status: 'Fulfilled', source: 'request' },
+              meta: { type: 'FULFILLED', audience: 'donor', requestId: doc._id, status: 'Fulfilled', source: 'request' },
             });
           }
         });
       }
-      if (notifications.length) await Notification.insertMany(notifications);
+      const toInsert = await filterNewNotifications(Notification, notifications);
+      if (toInsert.length) await Notification.insertMany(toInsert);
     } catch (notifyErr) {
       console.error('Notify (fulfilled) error:', notifyErr?.message || notifyErr);
     }
@@ -1050,13 +1054,20 @@ export const acceptDonation = async (req, res) => {
     try {
       const requesterId = doc.requesterId ? (typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId) : null;
       if (requesterId) {
-        await Notification.create({
+        await createNotificationOnce(Notification, {
           userId: requesterId,
-          title: 'Donor Accepted',
-          message: 'A donor has accepted your request and is preparing to donate.',
+          title: 'Donor accepted your request',
+          message: 'Donor accepted your request',
           type: 'request',
           urgent: true,
-          meta: { requestId: doc._id, status: isBloodRequest ? 'accepted' : 'Accepted', source: isBloodRequest ? 'blood-request' : 'request' },
+          meta: {
+            type: 'DONOR_ACCEPTED',
+            audience: 'requester',
+            requestId: doc._id,
+            donorId: isBloodRequest ? (doc.donorId?._id || doc.donorId) : (actingDonor?._id || null),
+            status: isBloodRequest ? 'accepted' : 'Accepted',
+            source: isBloodRequest ? 'blood-request' : 'request',
+          },
         });
       }
     } catch (e) { console.error('Notify accept error:', e?.message || e); }
@@ -1110,13 +1121,13 @@ export const declineDonation = async (req, res) => {
     // Notify requester that donor declined; system will try to rematch
     try {
       if (doc.requesterId) {
-        await Notification.create({
+        await createNotificationOnce(Notification, {
           userId: typeof doc.requesterId === 'object' ? doc.requesterId._id : doc.requesterId,
           title: 'Donor Declined',
           message: 'The matched donor declined. We are searching for another donor.',
           type: 'request',
           urgent: true,
-          meta: { requestId: doc._id, status: 'Pending', source: 'request' },
+          meta: { type: 'DONOR_DECLINED', audience: 'requester', requestId: doc._id, status: 'Pending', source: 'request' },
         });
       }
     } catch (e) { console.error('Notify decline error:', e?.message || e); }

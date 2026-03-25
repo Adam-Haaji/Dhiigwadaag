@@ -1,1 +1,19 @@
 .expo/
+
+# Dependencies
+**/node_modules/
+
+# Environment / secrets
+**/.env
+**/.env.*
+
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Builds
+**/dist/
+**/build/
+**/.turbo/
+**/.vite/

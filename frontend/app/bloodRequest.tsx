@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, ToastAndroid } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -10,6 +10,7 @@ import SelectFieldComponent from '../components/SelectField';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/context/ThemeContext';
 import { semanticColors } from '@/constants/colors';
+import { notify } from '@/ui/feedback/notify';
 
 export default function BloodRequest() {
   const { user, setUser } = useAuth();
@@ -41,31 +42,26 @@ export default function BloodRequest() {
 
   const update = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
-  const notifySuccess = (msg: string) => {
-    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
-    else Alert.alert('Success', msg);
-  };
-
   const validate = () => {
     if (!form.patientName || !form.bloodGroup || !form.district || !form.contactPerson || !form.contactPhone || !form.urgencyLevel || !form.reason) {
-      Alert.alert('Missing fields', 'Please fill in all required fields.');
+      notify.warning('Missing fields', 'Please fill in all required fields.');
       return false;
     }
     const u = Number(form.units);
     if (!Number.isFinite(u) || u < 1) {
-      Alert.alert('Units required', 'Please enter units needed (minimum 1).');
+      notify.warning('Units required', 'Please enter units needed (minimum 1).');
       return false;
     }
     if (!/^\d{9,12}$/.test(form.contactPhone.trim())) {
-      Alert.alert('Invalid phone', 'Enter a valid phone number');
+      notify.warning('Invalid phone', 'Enter a valid phone number');
       return false;
     }
     if (!/^[A-Za-z\s]+$/.test(form.patientName.trim())) {
-      Alert.alert('Invalid name', 'This field must contain letters only');
+      notify.warning('Invalid name', 'This field must contain letters only');
       return false;
     }
     if (!/^[A-Za-z\s]+$/.test(form.contactPerson.trim())) {
-      Alert.alert('Invalid contact', 'This field must contain letters only');
+      notify.warning('Invalid contact', 'This field must contain letters only');
       return false;
     }
     return true;
@@ -97,10 +93,10 @@ export default function BloodRequest() {
       if (resp?.user) {
         await setUser({ ...(user || {}), user: resp.user });
       }
-      notifySuccess('Blood request submitted');
+      notify.success('Blood request submitted');
       router.replace('/(home)/request');
     } catch (e: any) {
-      Alert.alert('Submission failed', e?.message || 'Please try again');
+      notify.error('Submission failed', e?.message || 'Please try again');
     }
   };
 

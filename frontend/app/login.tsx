@@ -10,6 +10,9 @@ import SectionCard from '@/components/SectionCard';
 import apiClient from "../service/api";
 import useAuthHook from "../hooks/useAuth";
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
+import { setNavigatorRole } from '@/service/homeMode';
 
 const Login = () => {
   const router = useRouter();
@@ -24,36 +27,45 @@ const Login = () => {
     try {
       const res = await apiClient.login({ email, password });
       await setUser({ token: res.token, user: res.user });
+      notify.success(MESSAGES.auth.login.success.title, MESSAGES.auth.login.success.body);
       const role = String(res?.user?.role || '').toLowerCase();
-      
-      // Check if user has requester record (regardless of role)
+
+      // Determine navigator from records: donor-only -> DonorTabs, requester-only -> RequesterTabs, both -> BothTabs
+      let hasRequester = false;
+      let hasDonor = false;
       try {
-        const meReq = await apiClient.requesterMe();
-        if (meReq?.exists) {
-          router.replace('/(home)/request');
-          return;
-        }
+        const [meReq, donorData] = await Promise.all([apiClient.requesterMe(), apiClient.donorMe()]);
+        hasRequester = !!meReq?.exists;
+        hasDonor = !!donorData?.exists;
       } catch {}
-      
-      // Check if user has donor record (using correct API)
-      try {
-        const donorData = await apiClient.donorMe();
-        if (donorData?.exists) {
-          router.replace('/(home)/donor');
-          return;
-        }
-      } catch {}
-      
-      // If normal user (no donor/requester records), show role selection page
+
+      if (hasDonor && hasRequester) {
+        await setNavigatorRole('both');
+        router.replace('/(home)');
+        return;
+      }
+      if (hasDonor) {
+        await setNavigatorRole('donor');
+        router.replace('/(donor)');
+        return;
+      }
+      if (hasRequester) {
+        await setNavigatorRole('requester');
+        router.replace('/(requester)');
+        return;
+      }
+
+      // No donor/requester records: show Choose Your Path (initial role selection)
       if (role === 'user' || role === 'none') {
         router.replace('/role');
       } else if (role === 'admin') {
+        await setNavigatorRole('both');
         router.replace('/(home)');
       } else {
-        // Default: show role selection for any other case
         router.replace('/role');
       }
     } catch (e: any) {
+      notify.error(MESSAGES.auth.login.fail.title, e?.message || MESSAGES.auth.login.fail.body);
       setError(e?.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -201,6 +213,7 @@ const styles = StyleSheet.create({
   },
   signupText: {
     ...typography.bodySmall,
+    fontWeight: '400', // or another allowed value, or remove if already set correctly
   },
   signupLink: {
     color: colors.primary,

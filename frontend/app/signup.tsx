@@ -9,6 +9,8 @@ import AppButton from '@/components/AppButton';
 import SectionCard from '@/components/SectionCard';
 import apiClient from "../service/api";
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 const Signup = () => {
   const router = useRouter();
@@ -22,9 +24,9 @@ const Signup = () => {
     setLoading(true);
     try {
       // Create normal user (role: 'user') - they will choose Donor or Requester after login
-      await apiClient.signup({ name, email, password, role: 'user', location: 'Unknown', phone });
+      await apiClient.signup({ name, email, password, role: 'Donor', location: '', phone });
       // Do NOT auto-login; redirect user to login screen after successful signup
-      alert('Account created successfully. Please login.');
+      notify.success(MESSAGES.auth.signup.success.title, MESSAGES.auth.signup.success.body);
       router.replace('/login');
     } catch (e: any) {
       setError(e?.message || 'Signup failed');

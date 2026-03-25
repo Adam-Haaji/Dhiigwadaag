@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -13,6 +12,8 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import colors, { semanticColors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 
 const styles = {
   root: {
@@ -148,7 +149,7 @@ export default function ResetPasswordScreen({ email }: Props) {
   const onReset = () => {
     if (!validate()) return;
     // TODO: call reset password API with token
-    Alert.alert('Success', 'Password has been reset');
+    notify.success(MESSAGES.password.reset.success.title, MESSAGES.password.reset.success.body);
     setNewPass('');
     setConfirmPass('');
   };

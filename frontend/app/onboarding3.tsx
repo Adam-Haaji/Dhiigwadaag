@@ -119,14 +119,13 @@ const onboarding3 = () => {
 
       {/* Header/Title Section */}
       <View style={styles.header}>
-        <Text style={styles.title}>Get Connect Community</Text>
+        <Text style={styles.title}>Get Matched Fast</Text>
       </View>
 
       {/* Description Section */}
       <View style={styles.descriptionContainer}>
         <Text style={styles.description}>
-          sed quia non numquam eius modi tempora labore{'\n'}
-          et dolore magnam aliquam.
+          We match donors and requests to make the process faster and easier.
         </Text>
       </View>
 

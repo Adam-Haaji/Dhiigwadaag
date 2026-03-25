@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Platform, Keyboard, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Keyboard, Modal, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { commonStyles } from '@/styles/commonStyles';
 import { semanticColors } from '@/constants/colors';
@@ -11,11 +11,15 @@ import api from "../service/api";
 import useAuth from "@/hooks/useAuth";
 import SelectField from '../components/SelectField';
 import { LOCATION_OPTIONS } from '@/constants/locations';
+import { notify } from '@/ui/feedback/notify';
+import { MESSAGES } from '@/ui/feedback/messages';
 // Note: Native date picker is optional; we'll lazy-require it to avoid build errors when offline
 
 export default function DonorRegistration() {
   const { setUser, user } = useAuth();
   const { isDark } = useTheme();
+  const params = useLocalSearchParams<{ fromRoleSelection?: string }>();
+  const fromRoleSelection = params.fromRoleSelection === '1';
   const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({
     fullName: '',
@@ -37,7 +41,23 @@ export default function DonorRegistration() {
       try {
         const donorData = await api.donorMe();
         if (donorData?.exists) {
-          // User already has donor record - redirect to dashboard (form shown only once)
+          const r = String(user?.user?.role || '').toLowerCase();
+          if (r === 'donor') {
+            router.replace('/(donor)/donor');
+            return;
+          }
+          if (r === 'requester') {
+            router.replace('/(requester)');
+            return;
+          }
+          // Role not yet donor (e.g. still "user"): initial path from Choose Your Path -> donor-only tabs only
+          if (fromRoleSelection) {
+            const { setNavigatorRole } = await import('@/service/homeMode');
+            await setNavigatorRole('donor');
+            setUser({ token: user?.token, user: { ...user?.user, role: 'donor' } });
+            router.replace('/(donor)/donor');
+            return;
+          }
           router.replace('/(home)/donor');
           return;
         }
@@ -60,6 +80,9 @@ export default function DonorRegistration() {
   const [focusedField, setFocusedField] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showIOSDatePicker, setShowIOSDatePicker] = useState(false);
+  const [donatedBefore, setDonatedBefore] = useState(false);
+  const [lastDonationDate, setLastDonationDate] = useState<Date | null>(null);
+  const [lastDonationDateError, setLastDonationDateError] = useState<string | null>(null);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -138,7 +161,7 @@ export default function DonorRegistration() {
   };
 
   const openDatePicker = () => {
-    const current = parseDate(formData.lastDonationDate) || new Date();
+    const current = lastDonationDate || parseDate(formData.lastDonationDate) || new Date();
     if (Platform.OS === 'android') {
       try {
          
@@ -150,12 +173,17 @@ export default function DonorRegistration() {
           maximumDate: new Date(),
           onChange: (event: any, selectedDate: Date | undefined) => {
             if (event.type === 'set' && selectedDate) {
+              setLastDonationDate(selectedDate);
+              setLastDonationDateError(null);
               updateFormData('lastDonationDate', formatDateForState(selectedDate));
             }
           },
         });
       } catch (e) {
-        Alert.alert('Date picker unavailable', 'Install "@react-native-community/datetimepicker" to pick a date. You can also type mm/dd/yyyy manually.');
+        notify.info(
+          MESSAGES.donor.registration.datePickerUnavailable.title,
+          MESSAGES.donor.registration.datePickerUnavailable.body
+        );
       }
     } else {
       setShowIOSDatePicker(true);
@@ -195,8 +223,14 @@ export default function DonorRegistration() {
   const isValid = useMemo(() => Object.keys(validationErrors).length === 0, [validationErrors]);
 
   const handleNext = () => {
+    if (donatedBefore && !lastDonationDate) {
+      setLastDonationDateError('Please select your last donation date.');
+      notify.error("Last donation date is required if you’ve donated before.");
+      return;
+    }
+    setLastDonationDateError(null);
     if (!isValid) {
-      Alert.alert('Validation', 'Fadlan sax khaladaadka.');
+      notify.warning(MESSAGES.donor.registration.validation.title, MESSAGES.donor.registration.validation.body);
       return;
     }
     handleSubmit();
@@ -229,6 +263,7 @@ export default function DonorRegistration() {
           relationship: 'Family',
           phone: formData.phone || '',
         },
+        donatedBefore,
         lastDonationDate: formData.lastDonationDate ? toIso(formData.lastDonationDate) : null,
         medicalCondition: formData.medicalCondition || 'None',
         hb: formData.hb ? Number(formData.hb) : undefined, // Include hb field for eligibility check
@@ -237,11 +272,22 @@ export default function DonorRegistration() {
       });
       
       if (resp?.donor || resp?.user) {
-        if (resp?.user) await setUser({ ...(user || {}), user: resp.user });
-        // Small delay to allow backend eligibility check to complete
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        // Immediately redirect to Donor Dashboard - no extra steps
-        router.replace('/(home)/donor');
+        // Initial selection from Choose Your Path: set role="donor" ONLY and show DonorTabs (no Request tab).
+        if (fromRoleSelection) {
+          const { setNavigatorRole } = await import('@/service/homeMode');
+          await setNavigatorRole('donor');
+          await setUser({
+            token: user?.token,
+            user: { ...(resp?.user || user?.user || {}), role: 'donor' },
+          });
+          notify.success(MESSAGES.donor.registration.success.title, MESSAGES.donor.registration.success.body);
+          router.replace('/(donor)');
+        } else {
+          if (resp?.user) await setUser({ ...(user || {}), user: resp.user });
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          notify.success(MESSAGES.donor.registration.success.title, MESSAGES.donor.registration.success.body);
+          router.replace('/(home)/donor');
+        }
       } else {
         throw new Error(resp?.error || 'Unknown response');
       }
@@ -293,6 +339,19 @@ export default function DonorRegistration() {
     dateInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     dateText: { color: semanticColors.textPrimary, fontSize: 16 },
     datePlaceholder: { color: semanticColors.textSecondary },
+    conditionalGroup: { marginTop: 6, marginBottom: 4 },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: semanticColors.borderSubtle,
+      borderRadius: 12,
+      backgroundColor: semanticColors.bgSurface,
+    },
+    toggleLabel: { fontSize: 15, fontWeight: '600', color: semanticColors.textPrimary, flex: 1, paddingRight: 12 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
     modalSheet: { backgroundColor: semanticColors.bgSurface, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderColor: semanticColors.borderSubtle, borderTopWidth: 1 },
     modalDoneBtn: { marginTop: 12, alignSelf: 'flex-end', backgroundColor: semanticColors.interactivePrimary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
@@ -455,21 +514,49 @@ export default function DonorRegistration() {
           />
           {validationErrors.hb && <Text style={styles.errorText}>{validationErrors.hb}</Text>}
 
-          <Text style={styles.inputLabel}>Last Donation Date</Text>
-          <TouchableOpacity
-            style={[
-              commonStyles.input,
-              { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle },
-              styles.dateInput
-            ]}
-            activeOpacity={0.7}
-            onPress={openDatePicker}
-          >
-            <Text style={[styles.dateText, !formData.lastDonationDate && styles.datePlaceholder]}>
-              {formData.lastDonationDate ? formatDisplayDate(formData.lastDonationDate) : 'mm/dd/yyyy'}
-            </Text>
-            <IconSymbol name="calendar" size={18} color={semanticColors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.conditionalGroup}>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>I have donated blood before</Text>
+              <Switch
+                value={donatedBefore}
+                onValueChange={(v) => {
+                  setDonatedBefore(v);
+                  setLastDonationDateError(null);
+                  if (!v) {
+                    setLastDonationDate(null);
+                    updateFormData('lastDonationDate', '');
+                  }
+                }}
+                thumbColor={Platform.OS === 'android' ? (donatedBefore ? semanticColors.interactivePrimary : semanticColors.borderStrong) : undefined}
+                trackColor={{ false: semanticColors.borderStrong, true: semanticColors.interactivePrimary }}
+                accessibilityRole="switch"
+                accessibilityLabel="I have donated blood before"
+              />
+            </View>
+
+            {donatedBefore && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.inputLabel}>Last donation date</Text>
+                <TouchableOpacity
+                  style={[
+                    commonStyles.input,
+                    { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.borderSubtle },
+                    styles.dateInput,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={openDatePicker}
+                  accessibilityRole="button"
+                  accessibilityLabel="Last donation date"
+                >
+                  <Text style={[styles.dateText, !formData.lastDonationDate && styles.datePlaceholder]}>
+                    {formData.lastDonationDate ? formatDisplayDate(formData.lastDonationDate) : 'Select a date'}
+                  </Text>
+                  <IconSymbol name="calendar" size={18} color={semanticColors.textSecondary} />
+                </TouchableOpacity>
+                {!!lastDonationDateError && <Text style={styles.errorText}>{lastDonationDateError}</Text>}
+              </View>
+            )}
+          </View>
 
           <View style={styles.inputGroup}>
             <SelectField
@@ -514,12 +601,16 @@ export default function DonorRegistration() {
                   const DT = require('@react-native-community/datetimepicker').default;
                   return (
                     <DT
-                      value={parseDate(formData.lastDonationDate) || new Date()}
+                      value={lastDonationDate || parseDate(formData.lastDonationDate) || new Date()}
                       mode="date"
                       display="spinner"
                       maximumDate={new Date()}
                       onChange={(_: any, selectedDate: Date | undefined) => {
-                        if (selectedDate) updateFormData('lastDonationDate', formatDateForState(selectedDate));
+                        if (selectedDate) {
+                          setLastDonationDate(selectedDate);
+                          setLastDonationDateError(null);
+                          updateFormData('lastDonationDate', formatDateForState(selectedDate));
+                        }
                       }}
                       style={{ width: '100%' }}
                     />

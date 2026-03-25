@@ -9,6 +9,8 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { StatusBar } from 'expo-status-bar';
 import { semanticColors } from '../constants/colors';
 import { useNotificationSetup } from '../hooks/useNotification';
+import { initLanguage } from '@/ui/i18n';
+import CenterToastProvider from '@/ui/toast/CenterToastProvider';
 
 function InnerLayout() {
   // Workaround: Some Android devices throw "Unable to activate keep awake" in Expo Go.
@@ -25,6 +27,11 @@ function InnerLayout() {
       ]);
     }
   }, []);
+
+  useEffect(() => {
+    // Initialize saved app language for localized toasts (EN/SO).
+    initLanguage().catch(() => {});
+  }, []);
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -39,7 +46,9 @@ function InnerLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: semanticColors.bgAlt }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {fontsLoaded && <Stack screenOptions={{ headerShown: false }} />}
+      <CenterToastProvider>
+        {fontsLoaded && <Stack screenOptions={{ headerShown: false }} />}
+      </CenterToastProvider>
     </View>
   );
 }
